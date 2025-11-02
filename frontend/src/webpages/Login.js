@@ -14,6 +14,9 @@ function Login() {
   const [forgotMsg, setForgotMsg] = useState('');
   
   const navigate = useNavigate();
+  // Prefer an explicit REACT_APP_API_URL for deployed builds.
+  // While developing locally (NODE_ENV === 'development') use localhost.
+  const API_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5000' : 'https://your-production-api.example.com');
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -21,67 +24,31 @@ function Login() {
       return;
     }
     try {
-      const res = await fetch('/api/login', {
+  const res = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        // store token for authenticated requests
-        if (data.token) {
-          localStorage.setItem('authToken', data.token);
-          localStorage.setItem('userId', data.user_id);
-          localStorage.setItem('email', data.email);
-        }
-        navigate('/dashboard');
-      } else if (res.status === 401) {
-        setMsg(data.message || "Invalid username or password.");
+      
+      if (data.success) {
+        // store token and user info for authenticated requests
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('userId', data.user_id);
+        localStorage.setItem('email', data.email);
+        setMsg('Login successful!');
+        // Navigate to dashboard after successful login
+        setTimeout(() => navigate('/dashboard'), 1000);
       } else {
-        setMsg(data.message || 'Login failed');
+        setMsg(data.message || 'Invalid credentials');
       }
     } catch (error) {
-      setMsg("Could not connect to server.");
+      console.error('Login error:', error);
+      setMsg("Could not connect to server. Please try again later.");
     }
   };
 
-  const handleRegister = async () => {
-    setRegMsg('');
-    if (!regFullName || !regEmail || !regPhone || !regUsername || !regPassword || !regMpin) {
-      setRegMsg('Please fill all required fields.');
-      return;
-    }
-    if (!/^[0-9]{6}$/.test(regMpin)) {
-      setRegMsg('MPIN must be 6 digits.');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: regFullName,
-          email: regEmail,
-          phoneNo: regPhone,
-          username: regUsername,
-          password: regPassword,
-          mpin: regMpin,
-          user_role: regRole
-        }),
-      });
-      const data = await res.json();
-      if (res.status === 201) {
-        setRegMsg('Registration successful! You can now log in.');
-        // Optionally switch back to login view
-        setShowRegister(false);
-      } else {
-        setRegMsg(data.message || 'Registration failed');
-      }
-    } catch (err) {
-      setRegMsg('Could not connect to server.');
-    }
-  };
+  
 
   const handleForgotPassword = async () => {
     if (!username || !newPassword) {
@@ -89,7 +56,7 @@ function Login() {
       return;
     }
     try {
-      const res = await fetch('/api/forgot-password', {
+  const res = await fetch(`${API_URL}/api/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, new_password: newPassword }),

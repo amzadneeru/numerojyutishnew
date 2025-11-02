@@ -16,7 +16,7 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent / 'data.env')
 
 app = Flask(__name__)
 # Allow CORS for the frontend dev server during development
-CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}})
+CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": ["https://numerojyutish.onrender.com/","http://localhost:3000", "http://127.0.0.1:3000"]}})
 
 
 def get_db_connection():
@@ -98,12 +98,18 @@ def register():
     username = data.get('username')
     password = data.get('password')
     mpin = data.get('mpin')
+    dob = data.get('dob')
+    gender = data.get('gender')
     #authtoken = data.get('authtoken')
     user_role = data.get('user_role')
 
     # Basic validations
-    if not full_name or not email or not phone or not username or not password or not mpin:
-        return jsonify(success=False, message='full_name, email, phoneNo, username, password  are required'), 400
+    if not full_name or not email or not phone or not username or not password or not mpin or not dob or not gender:
+        return jsonify(success=False, message='full_name, email, phoneNo, username, password, dob, gender, and mpin are required'), 400
+        
+    # Validate gender
+    if gender not in ['male', 'female', 'other']:
+        return jsonify(success=False, message='Invalid gender value'), 400
 
     if user_role not in ALLOWED_ROLES:
         return jsonify(success=False, message='Invalid user_role'), 400
@@ -122,11 +128,11 @@ def register():
         cur.execute(
             """
             INSERT INTO numerojyutishdb.users
-                (full_name, email, phoneNo, username, password_hash, mpin, authtoken)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
+                (full_name, email, phoneNo, username, password_hash, mpin, authtoken, dob, gender)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING user_id
             """,
-            (full_name, email, phone, username, password_hash, mpin, None)
+            (full_name, email, phone, username, password_hash, mpin, None, dob, gender)
         )
         user_id = cur.fetchone()[0]
         conn.commit()
