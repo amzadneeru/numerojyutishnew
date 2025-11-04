@@ -5,6 +5,7 @@ import App from './App';
 import Dashboard from './Dashboard';
 import ForgotPassword from './webpages/ForgotPassword';
 import Register from './webpages/Register';
+import Signup from './webpages/Signup';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
@@ -17,6 +18,7 @@ root.render(
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/signup" element={<Signup />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
