@@ -1,13 +1,15 @@
 import logging
 import os
 from pathlib import Path
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
 import psycopg2
 import secrets
 from werkzeug.security import check_password_hash
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash
+from authlib.integrations.flask_client import OAuth
+import requests
 
 # Minimal app: only user registration (create-user) functionality
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -15,8 +17,39 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 load_dotenv(dotenv_path=Path(__file__).resolve().parent / 'data.env')
 
 app = Flask(__name__)
-# Allow CORS for the frontend dev server during development
-CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": ["https://numerojyutish.onrender.com/","http://localhost:3000", "http://127.0.0.1:3000"]}})
+# Allow CORS from any origin (useful for development/testing).
+# Note: allowing all origins with credentials can be unsafe in production.
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
+
+# OAuth configuration (Google / Facebook)
+oauth = OAuth(app)
+
+# Register Google (OpenID Connect)
+try:
+    oauth.register(
+        name='google',
+        client_id=os.getenv('GOOGLE_CLIENT_ID'),
+        client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'}
+    )
+except Exception:
+    # registration may fail if env vars are not set; we'll handle missing config at runtime
+    pass
+
+# Register Facebook
+try:
+    oauth.register(
+        name='facebook',
+        client_id=os.getenv('FACEBOOK_CLIENT_ID'),
+        client_secret=os.getenv('FACEBOOK_CLIENT_SECRET'),
+        access_token_url='https://graph.facebook.com/v11.0/oauth/access_token',
+        authorize_url='https://www.facebook.com/v11.0/dialog/oauth',
+        api_base_url='https://graph.facebook.com/v11.0/',
+        client_kwargs={'scope': 'email'}
+    )
+except Exception:
+    pass
 
 
 def get_db_connection():
@@ -62,7 +95,7 @@ def login():
         conn = get_db_connection()
         cur = conn.cursor()
         # Look up by username or email
-        cur.execute("SELECT user_id, email, username, password_hash FROM numerojyutishdb.users WHERE username = %s OR email = %s", (username, username))
+        cur.execute("SELECT user_id, email, phone, password_hash FROM numerojyutishdb.security WHERE phone = %s OR email = %s", (username, username))
         row = cur.fetchone()
         if not row:
             cur.close()
@@ -88,6 +121,95 @@ def login():
         except Exception:
             pass
         return jsonify(success=False, message=f'Error during login: {str(e)}'), 500
+
+@app.route('/api/signup', methods=['POST'])
+def signup():
+    data = request.get_json() or {}
+    email = data.get('email')
+    phone = data.get('phone')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
+    
+    # Check if either email or phone is provided
+    if not email and not phone:
+        return jsonify(success=False, message='Either email or phone is required'), 400
+        
+    # Validate password
+    if not password:
+        return jsonify(success=False, message='Password is required'), 400
+        
+    # Check password confirmation
+    if password != confirm_password:
+        return jsonify(success=False, message='Passwords do not match'), 400
+        
+    # Basic email validation
+    if email and not '@' in email:
+        return jsonify(success=False, message='Invalid email format'), 400
+        
+    # Basic phone validation (assuming simple length check)
+    if phone and not phone.isdigit():
+        return jsonify(success=False, message='Phone number should contain only digits'), 400
+
+    password_hash = generate_password_hash(password)
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if email/phone already exists
+        if email:
+            cur.execute("SELECT user_id FROM numerojyutishdb.security WHERE email = %s", (email,))
+            if cur.fetchone():
+                cur.close()
+                conn.close()
+                return jsonify(success=False, message='Email already registered'), 409
+                
+        if phone:
+            cur.execute("SELECT user_id FROM numerojyutishdb.security WHERE phone = %s", (phone,))
+            if cur.fetchone():
+                cur.close()
+                conn.close()
+                return jsonify(success=False, message='Phone number already registered'), 409
+        
+        # Insert new user
+        cur.execute(
+            """
+            INSERT INTO numerojyutishdb.security
+                (email, phone, password_hash, user_role, authtoken)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING user_id
+            """,
+            (email, phone, password_hash, '1', None)
+        )
+        
+        user_id = cur.fetchone()[0]
+        conn.commit()
+        
+        # Generate auth token for immediate login
+        token = secrets.token_urlsafe(32)
+        cur.execute("UPDATE numerojyutishdb.security SET authtoken = %s WHERE user_id = %s", (token, user_id))
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(
+            success=True, 
+            message='Signup successful!',
+            user_id=user_id,
+            token=token,
+            email=email,
+            phone=phone
+        ), 201
+        
+    except Exception as e:
+        logging.error(f"Error during signup: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error during signup. Please try again.'), 500
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -158,6 +280,74 @@ def register():
     except Exception as e:
         logging.error(f"Error creating user: {e}")
         return jsonify(success=False, message=f'Error creating user: {str(e)}'), 500
+
+
+# OAuth endpoints to start and complete social login
+@app.route('/api/auth/<provider>')
+def oauth_login(provider):
+    if provider not in ('google', 'facebook'):
+        return jsonify(success=False, message='Unsupported provider'), 400
+    # Redirect URI must be registered in the OAuth provider console
+    # Prefer explicit BACKEND_REDIRECT_URL, otherwise build it from this request (backend callback)
+    redirect_uri = os.getenv('BACKEND_REDIRECT_URL') or (request.url_root.rstrip('/') + f'/api/auth/{provider}/callback')
+    try:
+        client = oauth.create_client(provider)
+        return client.authorize_redirect(redirect_uri)
+    except Exception as e:
+        logging.error(f"OAuth authorize error for {provider}: {e}")
+        return jsonify(success=False, message='OAuth configuration error'), 500
+
+@app.route('/api/auth/<provider>/callback')
+def oauth_callback(provider):
+    if provider not in ('google', 'facebook'):
+        return jsonify(success=False, message='Unsupported provider'), 400
+    try:
+        client = oauth.create_client(provider)
+        token = client.authorize_access_token()
+        if provider == 'google':
+            # OpenID Connect response contains id_token
+            userinfo = client.parse_id_token(token)
+            email = userinfo.get('email')
+            full_name = userinfo.get('name')
+        else:
+            # Facebook: fetch profile
+            resp = client.get('me?fields=id,name,email')
+            info = resp.json()
+            email = info.get('email')
+            full_name = info.get('name')
+        if not email:
+            return jsonify(success=False, message='Email not provided by provider'), 400
+
+        # Create or find user
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT user_id FROM numerojyutishdb.security WHERE email = %s", (email,))
+        row = cur.fetchone()
+        if row:
+            user_id = row[0]
+        else:
+            # Insert a new user with no password (social login)
+            cur.execute(
+                "INSERT INTO numerojyutishdb.security (email, phone, password_hash, user_role, authtoken, full_name) VALUES (%s,%s,%s,%s,%s,%s) RETURNING user_id",
+                (email, None, None, '1', None, full_name)
+            )
+            user_id = cur.fetchone()[0]
+            conn.commit()
+
+        # generate application auth token and persist
+        app_token = secrets.token_urlsafe(32)
+        cur.execute("UPDATE numerojyutishdb.security SET authtoken = %s WHERE user_id = %s", (app_token, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        frontend = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        # Redirect back to frontend with token (frontend should handle storing token)
+        return redirect(f"{frontend}/social-callback?token={app_token}&user_id={user_id}&email={email}")
+
+    except Exception as e:
+        logging.error(f"OAuth callback error for {provider}: {e}")
+        return jsonify(success=False, message='OAuth callback error'), 500
 
 
 if __name__ == '__main__':
