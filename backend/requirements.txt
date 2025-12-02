@@ -5,3 +5,5 @@ gunicorn
 python-dotenv==1.0.1
 itsdangerous
 werkzeug
+authlib
+requests
