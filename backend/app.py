@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash
 from authlib.integrations.flask_client import OAuth
 import requests
+from twilio.rest import Client as TwilioClient
+from datetime import datetime, timedelta
 
 # Minimal app: only user registration (create-user) functionality
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -23,6 +25,10 @@ CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
 
 # OAuth configuration (Google / Facebook)
 oauth = OAuth(app)
+
+# Simple in-memory OTP store for signup OTPs (development use only).
+# Structure: { contact_string: { 'otp': '123456', 'expires': datetime } }
+otp_store = {}
 
 # Register Google (OpenID Connect)
 try:
@@ -211,6 +217,129 @@ def signup():
             pass
         return jsonify(success=False, message='Error during signup. Please try again.'), 500
 
+
+# OTP endpoints temporarily disabled. To re-enable, restore the route decorators and function names.
+# @app.route('/api/send-signup-otp', methods=['POST'])
+def send_signup_otp_disabled():
+    data = request.get_json() or {}
+    email = data.get('email')
+    phone = data.get('phone')
+    if not email and not phone:
+        return jsonify(success=False, message='Either email or phone is required'), 400
+
+    contact = email if email else phone
+    # 6-digit OTP
+    otp = f"{secrets.randbelow(1000000):06d}"
+    otp_store[contact] = {'otp': otp, 'expires': datetime.utcnow() + timedelta(minutes=5)}
+    # If TWILIO credentials are available and a phone number was provided, send SMS.
+    tw_sid = os.getenv('MG3db7c4b2e813f1fd2cc25bca713c89a6')
+    tw_token = os.getenv('AC498cb0b4be4c95124be8ccef8cbdc280')
+    tw_from = os.getenv('15707415917')
+    if phone and tw_sid and tw_token and tw_from:
+        try:
+            tw_client = TwilioClient(tw_sid, tw_token)
+            # phone should be in E.164 format (e.g. +9198XXXXXXXX)
+            msg = tw_client.messages.create(
+                body=f"Your OTP is {otp}",
+                from_=tw_from,
+                to=phone
+            )
+            logging.info(f"Sent OTP SMS to {phone}, sid={getattr(msg, 'sid', None)}")
+            return jsonify(success=True, message='OTP sent via SMS'), 200
+        except Exception as e:
+            logging.error(f"Error sending OTP via Twilio to {phone}: {e}")
+            # return error so client can surface it
+            return jsonify(success=False, message='Failed to send OTP via SMS'), 500
+
+    # Fallback for email or when Twilio not configured: log OTP (development only)
+    logging.info(f"Signup OTP for {contact}: {otp}")
+    return jsonify(success=True, message='OTP sent (logged on server)'), 200
+
+
+# @app.route('/api/verify-signup-otp', methods=['POST'])
+def verify_signup_otp_disabled():
+    data = request.get_json() or {}
+    email = data.get('email')
+    phone = data.get('phone')
+    otp = data.get('otp')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
+
+    if not (email or phone) or not otp or not password:
+        return jsonify(success=False, message='email/phone, otp and password required'), 400
+
+    contact = email if email else phone
+    record = otp_store.get(contact)
+    if not record:
+        return jsonify(success=False, message='OTP not requested or expired'), 400
+    if datetime.utcnow() > record['expires']:
+        otp_store.pop(contact, None)
+        return jsonify(success=False, message='OTP expired'), 400
+    if record['otp'] != str(otp):
+        return jsonify(success=False, message='Invalid OTP'), 400
+
+    # OTP is valid, proceed with registration (similar checks to /api/signup)
+    if password != confirm_password:
+        return jsonify(success=False, message='Passwords do not match'), 400
+    if email and '@' not in email:
+        return jsonify(success=False, message='Invalid email format'), 400
+    if phone and not phone.isdigit():
+        return jsonify(success=False, message='Phone number should contain only digits'), 400
+
+    password_hash = generate_password_hash(password)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Check for existing email/phone
+        if email:
+            cur.execute("SELECT user_id FROM numerojyutishdb.security WHERE email = %s", (email,))
+            if cur.fetchone():
+                cur.close(); conn.close()
+                return jsonify(success=False, message='Email already registered'), 409
+        if phone:
+            cur.execute("SELECT user_id FROM numerojyutishdb.security WHERE phone = %s", (phone,))
+            if cur.fetchone():
+                cur.close(); conn.close()
+                return jsonify(success=False, message='Phone number already registered'), 409
+
+        cur.execute(
+            """
+            INSERT INTO numerojyutishdb.security
+                (email, phone, password_hash, user_role, authtoken)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING user_id
+            """,
+            (email, phone, password_hash, '1', None)
+        )
+        user_id = cur.fetchone()[0]
+        conn.commit()
+        # Generate auth token for immediate login
+        token = secrets.token_urlsafe(32)
+        cur.execute("UPDATE numerojyutishdb.security SET authtoken = %s WHERE user_id = %s", (token, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        # remove OTP record
+        otp_store.pop(contact, None)
+        return jsonify(success=True, message='Signup successful', user_id=user_id, token=token, email=email, phone=phone), 201
+    except psycopg2.IntegrityError as e:
+        logging.error(f"Integrity error creating user (OTP flow): {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        msg = str(e).lower()
+        if 'email' in msg:
+            return jsonify(success=False, message='Email already registered'), 409
+        if 'phoneno' in msg or 'phone' in msg:
+            return jsonify(success=False, message='Phone number already registered'), 409
+        if 'username' in msg:
+            return jsonify(success=False, message='Username already taken'), 409
+        return jsonify(success=False, message='Duplicate value'), 409
+    except Exception as e:
+        logging.error(f"Error creating user (OTP flow): {e}")
+        return jsonify(success=False, message=f'Error creating user: {str(e)}'), 500
+
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
@@ -280,6 +409,253 @@ def register():
     except Exception as e:
         logging.error(f"Error creating user: {e}")
         return jsonify(success=False, message=f'Error creating user: {str(e)}'), 500
+
+
+# Relationship status lookup endpoints
+@app.route('/api/relationship-statuses', methods=['GET'])
+def list_relationship_statuses():
+    """Return all rows from relationship_status_lut."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT code, status_key, display_value FROM numerojyutishdb.relationship_status_lut ORDER BY code")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        data = [
+            { 'code': r[0], 'status_key': r[1], 'display_value': r[2] }
+            for r in rows
+        ]
+        return jsonify(success=True, data=data)
+    except Exception as e:
+        logging.error(f"Error listing relationship statuses: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error fetching relationship statuses'), 500
+
+
+@app.route('/api/relationship-statuses/<int:code>', methods=['GET'])
+def get_relationship_status(code):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT code, status_key, display_value FROM numerojyutishdb.relationship_status_lut WHERE code = %s", (code,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify(success=False, message='Not found'), 404
+        return jsonify(success=True, data={ 'code': row[0], 'status_key': row[1], 'display_value': row[2] })
+    except Exception as e:
+        logging.error(f"Error fetching relationship status {code}: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error fetching relationship status'), 500
+
+
+@app.route('/api/relationship-statuses', methods=['POST'])
+def create_relationship_status():
+    data = request.get_json() or {}
+    code = data.get('code')
+    status_key = data.get('status_key')
+    display_value = data.get('display_value')
+    if code is None or not status_key or not display_value:
+        return jsonify(success=False, message='code, status_key and display_value are required'), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO numerojyutishdb.relationship_status_lut (code, status_key, display_value) VALUES (%s, %s, %s)", (code, status_key, display_value))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify(success=True, message='Created'), 201
+    except psycopg2.IntegrityError as e:
+        logging.error(f"Integrity error inserting relationship status: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Duplicate code or constraint violation'), 409
+    except Exception as e:
+        logging.error(f"Error creating relationship status: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error creating relationship status'), 500
+
+
+# Professional status lookup endpoints
+@app.route('/api/professional-statuses', methods=['GET'])
+def list_professional_statuses():
+    """Return all rows from professional_status_lut."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT code, status_key, display_value, description, active_flag FROM numerojyutishdb.professional_status_lut ORDER BY code")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        data = [
+            { 'code': r[0], 'status_key': r[1], 'display_value': r[2], 'description': r[3], 'active_flag': r[4] }
+            for r in rows
+        ]
+        return jsonify(success=True, data=data)
+    except Exception as e:
+        logging.error(f"Error listing professional statuses: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error fetching professional statuses'), 500
+
+
+@app.route('/api/professional-statuses/<int:code>', methods=['GET'])
+def get_professional_status(code):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT code, status_key, display_value, description, active_flag FROM numerojyutishdb.professional_status_lut WHERE code = %s", (code,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify(success=False, message='Not found'), 404
+        return jsonify(success=True, data={ 'code': row[0], 'status_key': row[1], 'display_value': row[2], 'description': row[3], 'active_flag': row[4] })
+    except Exception as e:
+        logging.error(f"Error fetching professional status {code}: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error fetching professional status'), 500
+
+
+@app.route('/api/professional-statuses', methods=['POST'])
+def create_professional_status():
+    data = request.get_json() or {}
+    code = data.get('code')
+    status_key = data.get('status_key')
+    display_value = data.get('display_value')
+    description = data.get('description')
+    active_flag = data.get('active_flag', 'Y')
+    if code is None or not status_key or not display_value:
+        return jsonify(success=False, message='code, status_key and display_value are required'), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO numerojyutishdb.professional_status_lut (code, status_key, display_value, description, active_flag) VALUES (%s, %s, %s, %s, %s)",
+            (code, status_key, display_value, description, active_flag)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify(success=True, message='Created'), 201
+    except psycopg2.IntegrityError as e:
+        logging.error(f"Integrity error inserting professional status: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Duplicate code or constraint violation'), 409
+    except Exception as e:
+        logging.error(f"Error creating professional status: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error creating professional status'), 500
+
+
+# Profession lookup endpoints
+@app.route('/api/professions', methods=['GET'])
+def list_professions():
+    """Return all rows from profession_lut."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT code, profession_key, display_value, category, active_flag FROM numerojyutishdb.profession_lut ORDER BY code")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        data = [
+            { 'code': r[0], 'profession_key': r[1], 'display_value': r[2], 'category': r[3], 'active_flag': r[4] }
+            for r in rows
+        ]
+        return jsonify(success=True, data=data)
+    except Exception as e:
+        logging.error(f"Error listing professions: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error fetching professions'), 500
+
+
+@app.route('/api/professions/<int:code>', methods=['GET'])
+def get_profession(code):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT code, profession_key, display_value, category, active_flag FROM numerojyutishdb.profession_lut WHERE code = %s", (code,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify(success=False, message='Not found'), 404
+        return jsonify(success=True, data={ 'code': row[0], 'profession_key': row[1], 'display_value': row[2], 'category': row[3], 'active_flag': row[4] })
+    except Exception as e:
+        logging.error(f"Error fetching profession {code}: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error fetching profession'), 500
+
+
+@app.route('/api/professions', methods=['POST'])
+def create_profession():
+    data = request.get_json() or {}
+    code = data.get('code')
+    profession_key = data.get('profession_key')
+    display_value = data.get('display_value')
+    category = data.get('category')
+    active_flag = data.get('active_flag', 'Y')
+    if code is None or not profession_key or not display_value:
+        return jsonify(success=False, message='code, profession_key and display_value are required'), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO numerojyutishdb.profession_lut (code, profession_key, display_value, category, active_flag) VALUES (%s, %s, %s, %s, %s)",
+            (code, profession_key, display_value, category, active_flag)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify(success=True, message='Created'), 201
+    except psycopg2.IntegrityError as e:
+        logging.error(f"Integrity error inserting profession: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Duplicate code or constraint violation'), 409
+    except Exception as e:
+        logging.error(f"Error creating profession: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Error creating profession'), 500
 
 
 # OAuth endpoints to start and complete social login
