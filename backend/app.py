@@ -346,30 +346,44 @@ def register():
     full_name = data.get('full_name')
     email = data.get('email')
     phone = data.get('phoneNo')
-    username = data.get('username')
-    password = data.get('password')
-    mpin = data.get('mpin')
+    #username = data.get('username')
+    #password = data.get('password')
+    #mpin = data.get('mpin')
     dob = data.get('dob')
     gender = data.get('gender')
+    # relationship / professional lookup values
+    relationship_code = data.get('relationship_code')
+    relationship_status_key = data.get('relationship_status_key')
+    professional_code = data.get('professional_code')
+    profession_key = data.get('profession_key')
+    professional_status_code = data.get('professional_status_code')
+    professional_status_key = data.get('professional_status_key')
     #authtoken = data.get('authtoken')
-    user_role = data.get('user_role')
+    #user_role = data.get('user_role')
 
     # Basic validations
-    if not full_name or not email or not phone or not username or not password or not mpin or not dob or not gender:
-        return jsonify(success=False, message='full_name, email, phoneNo, username, password, dob, gender, and mpin are required'), 400
+    # require the core identity fields plus relationship/professional lookup data
+    if not full_name or not email or not phone or  not dob or not gender:
+        return jsonify(success=False, message='full_name, email, phoneNo,  dob, and gender are required'), 400
+
+    # require lookup codes/keys for relationship and professional selections
+    if (relationship_code is None or not relationship_status_key or
+        professional_code is None or not profession_key or
+        professional_status_code is None or not professional_status_key):
+        return jsonify(success=False, message='relationship_code, relationship_status_key, professional_code, profession_key, professional_status_code and professional_status_key are required'), 400
         
     # Validate gender
     if gender not in ['male', 'female', 'other']:
         return jsonify(success=False, message='Invalid gender value'), 400
 
-    if user_role not in ALLOWED_ROLES:
-        return jsonify(success=False, message='Invalid user_role'), 400
+    #if user_role not in ALLOWED_ROLES:
+        #return jsonify(success=False, message='Invalid user_role'), 400
 
     # validate mpin is 6 digits
-    if not isinstance(mpin, str) or not mpin.isdigit() or len(mpin) != 6:
-        return jsonify(success=False, message='mpin must be a 6 digit string'), 400
+   # if not isinstance(mpin, str) or not mpin.isdigit() or len(mpin) != 6:
+        #return jsonify(success=False, message='mpin must be a 6 digit string'), 400
 
-    password_hash = generate_password_hash(password)
+    #password_hash = generate_password_hash(password)
 
     try:
         conn = get_db_connection()
@@ -379,11 +393,17 @@ def register():
         cur.execute(
             """
             INSERT INTO numerojyutishdb.users
-                (full_name, email, phoneNo, username, password_hash, mpin, authtoken, dob, gender)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                (full_name, email, phoneNo,   dob, gender,
+                 relationship_code, relationship_status_key,
+                 professional_code, profession_key, professional_status_code, professional_status_key)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING user_id
             """,
-            (full_name, email, phone, username, password_hash, mpin, None, dob, gender)
+            (
+                full_name, email, phone,   dob, gender,
+                relationship_code, relationship_status_key,
+                professional_code, profession_key, professional_status_code, professional_status_key
+            )
         )
         user_id = cur.fetchone()[0]
         conn.commit()
@@ -399,12 +419,12 @@ def register():
         except Exception:
             pass
         msg = str(e).lower()
-        if 'email' in msg:
-            return jsonify(success=False, message='Email already registered'), 409
-        if 'phoneno' in msg or 'phone' in msg:
-            return jsonify(success=False, message='Phone number already registered'), 409
-        if 'username' in msg:
-            return jsonify(success=False, message='Username already taken'), 409
+        #if 'email' in msg:
+            #return jsonify(success=False, message='Email already registered'), 409
+        #if 'phoneno' in msg or 'phone' in msg:
+            #return jsonify(success=False, message='Phone number already registered'), 409
+        #if 'username' in msg:
+            #return jsonify(success=False, message='Username already taken'), 409
         return jsonify(success=False, message='Duplicate value'), 409
     except Exception as e:
         logging.error(f"Error creating user: {e}")
