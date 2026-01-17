@@ -11,6 +11,9 @@ function Signup() {
     confirmPassword: ''
   });
   const [msg, setMsg] = useState('');
+  // OTP flow temporarily disabled. Keep vars here commented for future use.
+  // const [otpRequested, setOtpRequested] = useState(false);
+  // const [otp, setOtp] = useState('');
   const API_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5000' : 'https://your-production-api.example.com');
 
   const handleChange = (e) => {
@@ -20,28 +23,21 @@ function Signup() {
       [name]: value
     }));
   };
-
+  // Revert to simple signup flow (no OTP) for now.
   const handleSubmit = async () => {
-    // Reset message
     setMsg('');
-
-    // Validate inputs
     if (!formData.password || (!formData.email && !formData.phone)) {
       setMsg('Please enter either email or phone, and password');
       return;
     }
-
     if (formData.password !== formData.confirmPassword) {
       setMsg('Passwords do not match');
       return;
     }
-
     try {
       const res = await fetch(`${API_URL}/api/signup`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: formData.email,
           phone: formData.phone,
@@ -49,23 +45,18 @@ function Signup() {
           confirm_password: formData.confirmPassword
         })
       });
-
       const data = await res.json();
-
-      if (data.success) {
-        // Store auth data
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('userId', data.user_id);
+      if (res.ok && data.success) {
+        if (data.token) localStorage.setItem('authToken', data.token);
+        if (data.user_id) localStorage.setItem('userId', data.user_id);
         if (data.email) localStorage.setItem('email', data.email);
-
-        setMsg('Signup successful!');
-        // Navigate to dashboard after brief delay
+        setMsg('Signup successful! Redirecting...');
         setTimeout(() => navigate('/dashboard'), 1000);
       } else {
         setMsg(data.message || 'Signup failed. Please try again.');
       }
-    } catch (error) {
-      console.error('Signup error:', error);
+    } catch (err) {
+      console.error('Signup error:', err);
       setMsg('Could not connect to server. Please try again later.');
     }
   };
@@ -108,6 +99,8 @@ function Signup() {
           onChange={handleChange}
           className="login-input"
         />
+
+        {/* OTP input temporarily disabled */}
 
         <input
           type="password"
@@ -154,14 +147,14 @@ function Signup() {
           justifyContent: 'center'
         }}>
           <button 
-            onClick={() => {/* TODO: Implement Facebook login */}} 
+            onClick={() => { window.location.href = `${API_URL}/api/auth/facebook`; }} 
             className="social-button"
             style={{ padding: '0.5rem 1rem', borderRadius: '4px', border: '1px solid #ddd' }}
           >
             Facebook
           </button>
           <button 
-            onClick={() => {/* TODO: Implement Google login */}} 
+            onClick={() => { window.location.href = `${API_URL}/api/auth/google`; }} 
             className="social-button"
             style={{ padding: '0.5rem 1rem', borderRadius: '4px', border: '1px solid #ddd' }}
           >

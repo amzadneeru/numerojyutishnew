@@ -6,6 +6,9 @@ import Dashboard from './Dashboard';
 import ForgotPassword from './webpages/ForgotPassword';
 import Register from './webpages/Register';
 import Signup from './webpages/Signup';
+import RegistrationWizard from './webpages/RegistrationWizard';
+import SubscriptionPlan from './webpages/SubscriptionPlan';
+import SocialCallback from './webpages/SocialCallback';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
@@ -19,6 +22,10 @@ root.render(
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/register" element={<Register />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/registration-wizard" element={<RegistrationWizard />} />
+        <Route path="/subscription-plan" element={<SubscriptionPlan />} />
+        <Route path="/auth/callback/:provider" element={<SocialCallback />} />
+        <Route path="/social-callback" element={<SocialCallback />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

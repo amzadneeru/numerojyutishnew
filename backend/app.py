@@ -472,6 +472,487 @@ def register():
         return jsonify(success=False, message=f'Error creating/updating user: {str(e)}'), 500
 
 
+@app.route('/api/user-profile/<int:user_id>', methods=['GET'])
+def get_user_profile(user_id):
+    """
+    Retrieve user profile data by user_id.
+    Expects Authorization header with Bearer token for authentication.
+    """
+    # Check if user has provided authorization token
+    auth_header = request.headers.get('Authorization', '')
+    token = None
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+    
+    if not token:
+        return jsonify(success=False, message='Authorization token required'), 401
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Verify token belongs to the requested user
+        cur.execute(
+            "SELECT user_id FROM numerojyutishdb.security WHERE authtoken = %s AND user_id = %s",
+            (token, user_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='Unauthorized'), 403
+        
+        # Fetch user profile data
+        cur.execute(
+            """
+            SELECT 
+                u.user_id,
+                u.full_name,
+                u.dob,
+                u.gender,
+                u.email,
+                u.phone_no,
+                u.username,
+                u.relationship_status,
+                u.professional_status,
+                u.profession,
+                s.password_hash
+            FROM numerojyutishdb.users u
+            LEFT JOIN numerojyutishdb.security s ON u.user_id = s.user_id
+            WHERE u.user_id = %s
+            """,
+            (user_id,)
+        )
+        
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if not row:
+            return jsonify(success=False, message='User not found'), 404
+        
+        user_data = {
+            'user_id': row[0],
+            'full_name': row[1],
+            'dob': row[2],
+            'gender': row[3],
+            'email': row[4],
+            'phoneNo': row[5],
+            'username': row[6],
+            'relationship_status': row[7],
+            'professional_status': row[8],
+            'profession': row[9],
+            'password': row[10] or ''  # Return hashed password (not ideal, but frontend may need it)
+        }
+        
+        return jsonify(success=True, user=user_data), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching user profile {user_id}: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error fetching user profile: {str(e)}'), 500
+
+
+@app.route('/api/user-profile/<int:user_id>', methods=['PUT'])
+def update_user_profile(user_id):
+    """
+    Update user profile data by user_id.
+    Expects Authorization header with Bearer token for authentication.
+    """
+    # Check if user has provided authorization token
+    auth_header = request.headers.get('Authorization', '')
+    token = None
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+    
+    if not token:
+        return jsonify(success=False, message='Authorization token required'), 401
+    
+    data = request.get_json() or {}
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Verify token belongs to the requested user
+        cur.execute(
+            "SELECT user_id FROM numerojyutishdb.security WHERE authtoken = %s AND user_id = %s",
+            (token, user_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='Unauthorized'), 403
+        
+        # Extract update fields from request
+        full_name = data.get('full_name')
+        dob = data.get('dob')
+        gender = data.get('gender')
+        email = data.get('email')
+        phoneNo = data.get('phoneNo')
+        username = data.get('username')
+        relationship_status = data.get('relationship_status_key')
+        professional_status = data.get('professional_status_key')
+        profession = data.get('profession_key')
+        
+        # Build update query dynamically
+        update_fields = []
+        params = []
+        
+        if full_name is not None:
+            update_fields.append("full_name = %s")
+            params.append(full_name)
+        if dob is not None:
+            update_fields.append("dob = %s")
+            params.append(dob)
+        if gender is not None:
+            update_fields.append("gender = %s")
+            params.append(gender)
+        if email is not None:
+            update_fields.append("email = %s")
+            params.append(email)
+        if phoneNo is not None:
+            update_fields.append("phone_no = %s")
+            params.append(phoneNo)
+        if username is not None:
+            update_fields.append("username = %s")
+            params.append(username)
+        if relationship_status is not None:
+            update_fields.append("relationship_status = %s")
+            params.append(relationship_status)
+        if professional_status is not None:
+            update_fields.append("professional_status = %s")
+            params.append(professional_status)
+        if profession is not None:
+            update_fields.append("profession = %s")
+            params.append(profession)
+        
+        # Add user_id to params for WHERE clause
+        params.append(user_id)
+        
+        if not update_fields:
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='No fields to update'), 400
+        
+        # Execute update
+        query = f"""
+            UPDATE numerojyutishdb.users
+            SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = %s
+        """
+        
+        cur.execute(query, params)
+        conn.commit()
+        
+        # Also update password in security table if provided
+        password = data.get('password')
+        if password:
+            password_hash = generate_password_hash(password)
+            cur.execute(
+                "UPDATE numerojyutishdb.security SET password_hash = %s WHERE user_id = %s",
+                (password_hash, user_id)
+            )
+            conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        logging.info(f"Updated user profile for user_id {user_id}")
+        return jsonify(success=True, message='Profile updated successfully'), 200
+        
+    except psycopg2.IntegrityError as e:
+        logging.error(f"Integrity error updating user profile: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Duplicate value or constraint violation'), 409
+    except Exception as e:
+        logging.error(f"Error updating user profile {user_id}: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error updating user profile: {str(e)}'), 500
+
+
+# Subscription Plans endpoints
+@app.route('/api/subscription-plans', methods=['GET'])
+def get_subscription_plans():
+    """
+    Retrieve all subscription plans.
+    Returns plan_id, plan_code, plan_name, description, is_active, subscribefor
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT plan_id, plan_code, plan_name, description, is_active, subscribefor
+            FROM numerojyutishdb.subscription_plans
+            WHERE is_active = true
+            ORDER BY plan_id
+            """
+        )
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        plans = [
+            {
+                'plan_id': r[0],
+                'plan_code': r[1],
+                'plan_name': r[2],
+                'description': r[3],
+                'is_active': r[4],
+                'subscribefor': r[5]
+            }
+            for r in rows
+        ]
+        
+        return jsonify(success=True, data=plans), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching subscription plans: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error fetching subscription plans: {str(e)}'), 500
+
+
+@app.route('/api/subscription-plans/<int:plan_id>', methods=['GET'])
+def get_subscription_plan(plan_id):
+    """
+    Retrieve a specific subscription plan by plan_id.
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT plan_id, plan_code, plan_name, description, is_active, subscribefor
+            FROM numerojyutishdb.subscription_plans
+            WHERE plan_id = %s
+            """,
+            (plan_id,)
+        )
+        
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if not row:
+            return jsonify(success=False, message='Subscription plan not found'), 404
+        
+        plan = {
+            'plan_id': row[0],
+            'plan_code': row[1],
+            'plan_name': row[2],
+            'description': row[3],
+            'is_active': row[4],
+            'subscribefor': row[5]
+        }
+        
+        return jsonify(success=True, data=plan), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching subscription plan {plan_id}: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error fetching subscription plan: {str(e)}'), 500
+
+
+# Subscription Pricing endpoints
+@app.route('/api/subscription-pricing', methods=['GET'])
+def get_subscription_pricing():
+    """
+    Retrieve all subscription pricing.
+    Returns plan_id, billing_cycle_id, country_code, base_price, tax_percent, final_price, is_active
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT plan_id, billing_cycle_id, country_code, base_price, tax_percent, final_price, is_active
+            FROM numerojyutishdb.subscription_pricing
+            WHERE is_active = true
+            ORDER BY plan_id, billing_cycle_id, country_code
+            """
+        )
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        pricing = [
+            {
+                'plan_id': r[0],
+                'billing_cycle_id': r[1],
+                'country_code': r[2],
+                'base_price': float(r[3]) if r[3] else 0,
+                'tax_percent': float(r[4]) if r[4] else 0,
+                'final_price': float(r[5]) if r[5] else 0,
+                'is_active': r[6]
+            }
+            for r in rows
+        ]
+        
+        return jsonify(success=True, data=pricing), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching subscription pricing: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error fetching subscription pricing: {str(e)}'), 500
+
+
+@app.route('/api/subscription-pricing/<int:plan_id>', methods=['GET'])
+def get_plan_pricing(plan_id):
+    """
+    Retrieve pricing for a specific subscription plan.
+    Optionally filter by country_code and billing_cycle_id via query parameters.
+    """
+    try:
+        country_code = request.args.get('country_code', 'IN')  # Default to India
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT plan_id, billing_cycle_id, country_code, base_price, tax_percent, final_price, is_active
+            FROM numerojyutishdb.subscription_pricing
+            WHERE plan_id = %s AND country_code = %s AND is_active = true
+            ORDER BY billing_cycle_id
+            """,
+            (plan_id, country_code)
+        )
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if not rows:
+            return jsonify(success=False, message=f'No pricing found for plan {plan_id} in country {country_code}'), 404
+        
+        pricing = [
+            {
+                'plan_id': r[0],
+                'billing_cycle_id': r[1],
+                'country_code': r[2],
+                'base_price': float(r[3]) if r[3] else 0,
+                'tax_percent': float(r[4]) if r[4] else 0,
+                'final_price': float(r[5]) if r[5] else 0,
+                'is_active': r[6]
+            }
+            for r in rows
+        ]
+        
+        return jsonify(success=True, data=pricing), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching pricing for plan {plan_id}: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error fetching plan pricing: {str(e)}'), 500
+
+
+@app.route('/api/subscription-plans-with-pricing', methods=['GET'])
+def get_plans_with_pricing():
+    """
+    Retrieve all subscription plans with their pricing information.
+    Returns combined data from both tables.
+    """
+    try:
+        country_code = request.args.get('country_code', 'IN')  # Default to India
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT 
+                sp.plan_id,
+                sp.plan_code,
+                sp.plan_name,
+                sp.description,
+                sp.is_active as plan_active,
+                sp.subscribefor,
+                spr.billing_cycle_id,
+                spr.country_code,
+                spr.base_price,
+                spr.tax_percent,
+                spr.final_price,
+                spr.is_active as pricing_active
+            FROM numerojyutishdb.subscription_plans sp
+            LEFT JOIN numerojyutishdb.subscription_pricing spr 
+                ON sp.plan_id = spr.plan_id AND spr.country_code = %s AND spr.is_active = true
+            WHERE sp.is_active = true
+            ORDER BY sp.plan_id, spr.billing_cycle_id
+            """,
+            (country_code,)
+        )
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # Group pricing by plan
+        plans_dict = {}
+        for row in rows:
+            plan_id = row[0]
+            
+            if plan_id not in plans_dict:
+                plans_dict[plan_id] = {
+                    'plan_id': row[0],
+                    'plan_code': row[1],
+                    'plan_name': row[2],
+                    'description': row[3],
+                    'is_active': row[4],
+                    'subscribefor': row[5],
+                    'pricing': []
+                }
+            
+            # Add pricing if available
+            if row[6] is not None:  # billing_cycle_id exists
+                plans_dict[plan_id]['pricing'].append({
+                    'billing_cycle_id': row[6],
+                    'country_code': row[7],
+                    'base_price': float(row[8]) if row[8] else 0,
+                    'tax_percent': float(row[9]) if row[9] else 0,
+                    'final_price': float(row[10]) if row[10] else 0,
+                    'is_active': row[11]
+                })
+        
+        plans = list(plans_dict.values())
+        
+        return jsonify(success=True, country_code=country_code, data=plans), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching plans with pricing: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error fetching plans with pricing: {str(e)}'), 500
+
+
 # Relationship status lookup endpoints
 @app.route('/api/relationship-statuses', methods=['GET'])
 def list_relationship_statuses():

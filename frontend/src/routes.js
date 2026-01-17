@@ -3,8 +3,10 @@ import App from './App';
 import Login from './webpages/Login';
 import Register from './webpages/Register';
 import Signup from './webpages/Signup';
+import RegistrationWizard from './webpages/RegistrationWizard';
 import Dashboard from './Dashboard';
 import ForgotPassword from './webpages/ForgotPassword';
+import SubscriptionPlan from './webpages/SubscriptionPlan';
 
 export const router = createBrowserRouter([
   {
@@ -24,11 +26,19 @@ export const router = createBrowserRouter([
     element: <Signup />,
   },
   {
+    path: '/registration-wizard',
+    element: <RegistrationWizard />,
+  },
+  {
     path: '/dashboard',
     element: <Dashboard />,
   },
   {
     path: '/forgot-password',
     element: <ForgotPassword />,
+  },
+  {
+    path: '/subscription-plan',
+    element: <SubscriptionPlan />,
   },
 ]);

@@ -1,14 +1,13 @@
 // src/components/Login.js
 import React, { useState } from 'react';
 import '../styles/Login.css';
-import { useNavigate, Link } from 'react-router-dom';
-
+import { useNavigate } from 'react-router-dom';
 
 function Login() {
-  const [username, setUsername] = useState('');
+  const [emailPhone, setEmailPhone] = useState('');
   const [password, setPassword] = useState('');
   const [msg, setMsg] = useState('');
-  const [showForgot, setShowForgot] = useState(false);
+  const [isOtpMode, setIsOtpMode] = useState(false);
   
   const [newPassword, setNewPassword] = useState('');
   const [forgotMsg, setForgotMsg] = useState('');
@@ -19,15 +18,15 @@ function Login() {
   const API_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5000' : 'https://your-production-api.example.com');
 
   const handleLogin = async () => {
-    if (!username || !password) {
-      setMsg("Please enter username and password.");
+    if (!emailPhone || !password) {
+      setMsg("Please enter email/phone and password.");
       return;
     }
     try {
-  const res = await fetch(`${API_URL}/api/login`, {
+      const res = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: emailPhone, password }),
       });
       const data = await res.json();
       
@@ -37,8 +36,8 @@ function Login() {
         localStorage.setItem('userId', data.user_id);
         localStorage.setItem('email', data.email);
         setMsg('Login successful!');
-        // Navigate to dashboard after successful login
-        setTimeout(() => navigate('/dashboard'), 1000);
+        // Navigate to subscription plan after successful login
+        setTimeout(() => navigate('/subscription-plan'), 1000);
       } else {
         setMsg(data.message || 'Invalid credentials');
       }
@@ -72,49 +71,131 @@ function Login() {
     }
   };
 
+  const handleOtpLogin = () => {
+    // TODO: Implement OTP login functionality
+    console.log('OTP login clicked');
+  };
+
   return (
-    <div className="login-wrapper">
-      <div className="login-box">
-        <h1 className="login-title">Login</h1>
+    <div className="login-wrapper" style={{ background: '#F8F1FF', minHeight: '100vh', padding: '20px' }}>
+      <div className="login-box" style={{ 
+        maxWidth: '400px', 
+        margin: '0 auto',
+        padding: '2rem',
+        background: 'white',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <h1 style={{ 
+          fontSize: '24px',
+          marginBottom: '8px',
+          fontWeight: 'bold'
+        }}>Sign In</h1>
+        <p style={{
+          color: '#666',
+          marginBottom: '24px'
+        }}>Access your account.</p>
+
         <input
           type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Email/Phone"
+          value={emailPhone}
+          onChange={(e) => setEmailPhone(e.target.value)}
           className="login-input"
+          style={{
+            width: '100%',
+            padding: '12px',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            marginBottom: '12px'
+          }}
         />
-        {!showForgot && (
-          <>
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="login-input"
-            />
-            <button onClick={handleLogin} className="login-button">Log In</button>
-            <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-              <Link to="/forgot-password" className="forgot-link">Forgot Password?</Link>
-              <Link to="/register" className="forgot-link">Create account</Link>
-            </div>
-            {msg && <p className="login-msg">{msg}</p>}
-          </>
+
+        {!isOtpMode && (
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="login-input"
+            style={{
+              width: '100%',
+              padding: '12px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              marginBottom: '16px'
+            }}
+          />
         )}
-        
-        {showForgot && (
-          <div className="forgot-password-form">
-            <input
-              type="password"
-              placeholder="New Password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              className="login-input"
-            />
-            <button onClick={handleForgotPassword} className="login-button">Reset Password</button>
-            <button className="forgot-link" onClick={() => { setShowForgot(false); setForgotMsg(''); }}>Back to Login</button>
-            {forgotMsg && <p className="login-msg">{forgotMsg}</p>}
-          </div>
-        )}
+
+        <button 
+          onClick={isOtpMode ? handleOtpLogin : handleLogin} 
+          className="login-button"
+          style={{
+            width: '100%',
+            padding: '12px',
+            border: 'none',
+            borderRadius: '4px',
+            background: 'linear-gradient(to right, #F4B555, #9C3B9C)',
+            color: 'white',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            marginBottom: '12px'
+          }}
+        >
+          Sign In
+        </button>
+
+        <button 
+          onClick={() => setIsOtpMode(!isOtpMode)} 
+          style={{
+            width: '100%',
+            padding: '12px',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            background: '#F8F1FF',
+            color: '#333',
+            cursor: 'pointer',
+            marginBottom: '24px'
+          }}
+        >
+          Sign In Using {isOtpMode ? 'Password' : 'OTP'}
+        </button>
+
+        {msg && <p style={{ color: msg.includes('successful') ? 'green' : 'red', textAlign: 'center', margin: '12px 0' }}>{msg}</p>}
+
+        <div style={{ textAlign: 'center', color: '#666', marginBottom: '16px' }}>Or, sign in using</div>
+
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <button
+            onClick={() => { window.location.href = `${API_URL}/api/auth/facebook`; }}
+            style={{
+              flex: 1,
+              padding: '10px',
+              border: '1px solid #1877F2',
+              borderRadius: '4px',
+              background: 'white',
+              color: '#1877F2',
+              cursor: 'pointer'
+            }}
+          >
+            Facebook
+          </button>
+          <button
+            onClick={() => { window.location.href = `${API_URL}/api/auth/google`; }}
+            style={{
+              flex: 1,
+              padding: '10px',
+              border: '1px solid #DB4437',
+              borderRadius: '4px',
+              background: 'white',
+              color: '#DB4437',
+              cursor: 'pointer'
+            }}
+          >
+            Google
+          </button>
+        </div>
       </div>
     </div>
   );
