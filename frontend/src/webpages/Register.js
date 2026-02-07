@@ -52,8 +52,8 @@ function Register() {
       });
       const data = await res.json();
       if (res.status === 201) {
-        setRegMsg('Registration successful! You can now log in.');
-        setTimeout(() => navigate('/'), 1200);
+        setRegMsg('Registration successful! Redirecting to products...');
+        setTimeout(() => navigate('/products'), 1200);
       } else {
         setRegMsg(data.message || 'Registration failed');
       }

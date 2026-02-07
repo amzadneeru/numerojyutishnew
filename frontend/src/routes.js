@@ -7,6 +7,9 @@ import RegistrationWizard from './webpages/RegistrationWizard';
 import Dashboard from './Dashboard';
 import ForgotPassword from './webpages/ForgotPassword';
 import SubscriptionPlan from './webpages/SubscriptionPlan';
+import Products from './webpages/Products';
+import ProductDetails from './webpages/ProductDetails';
+import ProductMaster from './webpages/admin/ProductMaster';
 
 export const router = createBrowserRouter([
   {
@@ -40,5 +43,17 @@ export const router = createBrowserRouter([
   {
     path: '/subscription-plan',
     element: <SubscriptionPlan />,
+  },
+  {
+    path: '/products',
+    element: <Products/>,
+  },
+  {
+    path: '/product-details/:productId',
+    element: <ProductDetails/>,
+  },
+  {
+    path: '/admin/productmaster',
+    element: <ProductMaster />,
   },
 ]);

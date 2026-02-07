@@ -51,7 +51,7 @@ function Signup() {
         if (data.user_id) localStorage.setItem('userId', data.user_id);
         if (data.email) localStorage.setItem('email', data.email);
         setMsg('Signup successful! Redirecting...');
-        setTimeout(() => navigate('/dashboard'), 1000);
+        setTimeout(() => navigate('/products'), 1000);
       } else {
         setMsg(data.message || 'Signup failed. Please try again.');
       }

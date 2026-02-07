@@ -107,11 +107,18 @@ function SubscriptionPlan() {
       billingPeriod: billingPeriod,
       price: price
     }));
-    navigate('/dashboard');
+    navigate('/subscription-plan');
   };
 
+
+    const handleProduct = async () => {
+      // Navigate to products listing (show all products)
+      navigate('/products');
+    };
+
   const handleSkip = () => {
-    navigate('/dashboard');
+    // Skip subscription selection and go to products listing
+    navigate('/subscription-plan');
   };
 
   const toggleDetails = () => {
@@ -171,11 +178,8 @@ function SubscriptionPlan() {
               <button className="dropdown-item" onClick={handleSettings}>
                 ⚙️ Settings
               </button>
-              <button className="dropdown-item" onClick={() => {
-                setShowUserMenu(false);
-                navigate('/dashboard');
-              }}>
-                📊 Dashboard
+              <button className="dropdown-item" onClick={handleProduct}>
+                📊 Products
               </button>
               <div className="dropdown-divider"></div>
               <button className="dropdown-item logout" onClick={handleLogout}>

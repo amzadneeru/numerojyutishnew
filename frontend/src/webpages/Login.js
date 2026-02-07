@@ -36,8 +36,8 @@ function Login() {
         localStorage.setItem('userId', data.user_id);
         localStorage.setItem('email', data.email);
         setMsg('Login successful!');
-        // Navigate to subscription plan after successful login
-        setTimeout(() => navigate('/subscription-plan'), 1000);
+        // Navigate to products page after successful login
+        setTimeout(() => navigate('/products'), 1000);
       } else {
         setMsg(data.message || 'Invalid credentials');
       }
