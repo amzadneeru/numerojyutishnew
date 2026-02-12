@@ -197,8 +197,12 @@ function Products() {
   const getProductImage = (product) => {
     if (product.images && product.images.length > 0) {
       const primaryImage = product.images.find(img => img.is_primary);
-      return primaryImage?.image_url || product.images[0]?.image_url;
+      // Support both old (image_url) and new (imageUrl) format
+      const imageUrl = primaryImage?.imageUrl || primaryImage?.image_url || product.images[0]?.imageUrl || product.images[0]?.image_url;
+      console.log('🖼️ [GET_PRODUCT_IMAGE] Retrieved image URL:', imageUrl, 'from', primaryImage ? 'primary' : 'first', 'image');
+      return imageUrl;
     }
+    console.warn('⚠️ [GET_PRODUCT_IMAGE] No images found for product, using placeholder');
     return 'https://via.placeholder.com/300x200?text=Product+Image';
   };
 

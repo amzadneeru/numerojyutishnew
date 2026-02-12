@@ -53,40 +53,54 @@ function ProductMaster() {
 
   const handleImageUrlChange = (e) => {
     const url = e.target.value;
+    console.log('🔗 Image URL entered:', url);
     setImageForm({ ...imageForm, image_url: url });
     setImagePreview(url);
+    if (url) {
+      console.log('👁️ Updating preview with URL:', url);
+    }
   };
 
   const handleImageFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      console.log('📁 Image file selected:', file.name, 'Size:', (file.size / 1024).toFixed(2) + 'KB', 'Type:', file.type);
+      
       // Validate file type
       if (!file.type.startsWith('image/')) {
+        console.error('❌ Invalid file type:', file.type);
         setError('Please select a valid image file');
         return;
       }
       // Validate file size (max 5MB)
       const maxSize = 5 * 1024 * 1024;
       if (file.size > maxSize) {
+        console.error('❌ File size exceeds limit:', file.size, 'bytes');
         setError('Image file size must be less than 5MB');
         return;
       }
       setImageFile(file);
       const preview = URL.createObjectURL(file);
       setImagePreview(preview);
+      console.log('✅ Image file validated and preview generated');
       setError('');
     }
   };
 
   const uploadImageFile = async (productId) => {
-    if (!imageFile) return null;
+    if (!imageFile) {
+      console.warn('⚠️ No image file to upload');
+      return null;
+    }
 
     try {
+      console.log('🚀 Starting image upload for product ID:', productId);
       setUploadingImage(true);
       const formData = new FormData();
       formData.append('file', imageFile);
       formData.append('product_id', productId);
 
+      console.log('📤 Sending image to:', `${API_URL}/api/upload-product-image`);
       const res = await fetch(`${API_URL}/api/upload-product-image`, {
         method: 'POST',
         headers: {
@@ -95,14 +109,22 @@ function ProductMaster() {
         body: formData
       });
 
+      console.log('📬 Response status:', res.status, res.statusText);
+
       if (!res.ok) {
         throw new Error('Failed to upload image');
       }
 
       const data = await res.json();
-      return data.data?.image_url || null;
+      console.log('✅ Image upload response:', data);
+      
+      const imageUrl = data.data?.image_url || null;
+      if (imageUrl) {
+        console.log('🖼️ Image URL received:', imageUrl);
+      }
+      return imageUrl;
     } catch (err) {
-      console.error('Image upload error:', err);
+      console.error('❌ Image upload error:', err);
       throw err;
     } finally {
       setUploadingImage(false);
@@ -144,14 +166,46 @@ function ProductMaster() {
   });
   const [editingTax, setEditingTax] = useState(null);
 
+  // Invoice / Inventory State (client-side)
+  const [inventories, setInventories] = useState([]);
+  const [inventoryForm, setInventoryForm] = useState({
+    inventory_id: null,
+    product_id: '',
+    quantity: 0
+  });
+  const [editingInventory, setEditingInventory] = useState(null);
+
   // Fetch all data on component mount
   useEffect(() => {
+    console.log('🎬 ProductMaster component mounted, initializing data fetch...');
     fetchCategories();
     fetchProducts();
     fetchPricings();
     fetchTaxes();
     fetchProductImages();
+    fetchInventories();
   }, [API_URL, authToken]);
+
+  const fetchInventories = async () => {
+    try {
+      console.log('📦 Fetching inventories from backend:', `${API_URL}/api/inventory-stock`);
+      const res = await fetch(`${API_URL}/api/inventory-stock`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const inv = data.data || [];
+        console.log('✅ Inventories fetched successfully:', inv.length, 'items');
+        setInventories(inv);
+      } else {
+        console.error('❌ Failed to fetch inventories. Status:', res.status);
+        setInventories([]);
+      }
+    } catch (err) {
+      console.error('❌ Error fetching inventories:', err);
+      setInventories([]);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -211,17 +265,164 @@ function ProductMaster() {
 
   const fetchProductImages = async () => {
     try {
+      console.log('📷 Fetching product images from:', `${API_URL}/api/product-images`);
       const res = await fetch(`${API_URL}/api/product-images`, {
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setProductImages(data.data || []);
+        const images = data.data || [];
+        console.log('✅ Product images fetched successfully:', images.length, 'images');
+        
+        // Validate new format: {productID, imageUrl}
+        if (images.length > 0) {
+          const firstImage = images[0];
+          console.log('📦 First image format check:');
+          console.log('   ✓ productID:', firstImage.productID);
+          console.log('   ✓ imageUrl:', firstImage.imageUrl);
+          console.log('   ✓ image_id:', firstImage.image_id);
+          console.log('   ✓ is_primary:', firstImage.is_primary);
+          
+          // Log all images with new format
+          const imagesByProduct = {};
+          images.forEach(img => {
+            if (!imagesByProduct[img.productID]) {
+              imagesByProduct[img.productID] = [];
+            }
+            imagesByProduct[img.productID].push(img.imageUrl);
+          });
+          
+          console.log('📊 Images grouped by productID:');
+          Object.entries(imagesByProduct).forEach(([productId, urls]) => {
+            console.log(`   Product ${productId}: ${urls.length} image(s)`);
+          });
+        }
+        
+        setProductImages(images);
+      } else {
+        console.error('❌ Failed to fetch product images. Status:', res.status);
       }
     } catch (err) {
-      console.error('Error fetching product images:', err);
+      console.error('❌ Error fetching product images:', err);
     }
   };
+
+    // Inventory handlers (backend API)
+    const handleInventorySubmit = async (e) => {
+      e.preventDefault();
+      setLoading(true);
+      setError('');
+      setSuccessMessage('');
+
+      try {
+        if (!inventoryForm.product_id) {
+          setError('Product is required');
+          setLoading(false);
+          return;
+        }
+        const qty = Number(inventoryForm.quantity);
+        if (Number.isNaN(qty) || qty < 0) {
+          setError('Quantity must be a non-negative number');
+          setLoading(false);
+          return;
+        }
+
+        let method, url, payload;
+        
+        if (editingInventory) {
+          // Update existing inventory
+          method = 'PUT';
+          url = `${API_URL}/api/inventory-stock/${editingInventory}`;
+          payload = {
+            quantity_available: qty
+          };
+          console.log('📝 Updating inventory:', editingInventory, payload);
+        } else {
+          // Create new inventory
+          method = 'POST';
+          url = `${API_URL}/api/inventory-stock`;
+          payload = {
+            product_id: inventoryForm.product_id,
+            warehouse_id: 1, // Default warehouse
+            quantity_available: qty
+          };
+          console.log('➕ Creating new inventory:', payload);
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.message || 'Failed to save inventory');
+        }
+
+        const data = await res.json();
+        console.log('✅ Inventory save response:', data);
+        
+        setSuccessMessage(`Inventory ${editingInventory ? 'updated' : 'created'} successfully!`);
+        setInventoryForm({ inventory_id: null, product_id: '', quantity: 0 });
+        setEditingInventory(null);
+        fetchInventories(); // Refresh list from backend
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } catch (err) {
+        console.error('❌ Error saving inventory:', err);
+        setError(err.message || 'Failed to save inventory');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleEditInventory = (item) => {
+      console.log('✏️ Editing inventory:', item);
+      setInventoryForm({ 
+        inventory_id: item.inventory_id, 
+        product_id: item.product_id, 
+        quantity: item.quantity_available || item.quantity || 0 
+      });
+      setEditingInventory(item.inventory_id);
+    };
+
+    const handleDeleteInventory = async (inventoryId) => {
+      if (!window.confirm('Are you sure you want to delete this inventory entry?')) return;
+      
+      setLoading(true);
+      setError('');
+      
+      try {
+        console.log('🗑️ Deleting inventory:', inventoryId);
+        const res = await fetch(`${API_URL}/api/inventory-stock/${inventoryId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.message || 'Failed to delete inventory');
+        }
+
+        console.log('✅ Inventory deleted successfully');
+        setSuccessMessage('Inventory deleted successfully!');
+        fetchInventories(); // Refresh list from backend
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } catch (err) {
+        console.error('❌ Error deleting inventory:', err);
+        setError(err.message || 'Failed to delete inventory');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleCancelEditInventory = () => {
+      setInventoryForm({ inventory_id: null, product_id: '', quantity: 0 });
+      setEditingInventory(null);
+    };
 
   // Category handlers
   const handleCategorySubmit = async (e) => {
@@ -527,8 +728,14 @@ function ProductMaster() {
   };
 
   const handleEditImage = (image) => {
-    setImageForm(image);
-    setImagePreview(image.image_url);
+    console.log('✏️ [EDIT_IMAGE] Editing image with new format:', image);
+    setImageForm({
+      ...image,
+      // Map new field names to form field names if needed
+      image_url: image.imageUrl,
+      product_id: image.productID
+    });
+    setImagePreview(image.imageUrl);
     setEditingImage(image.image_id);
   };
 
@@ -674,6 +881,12 @@ function ProductMaster() {
             onClick={() => setActiveTab('images')}
           >
             🖼️ Product Images
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'invoices' ? 'active' : ''}`}
+            onClick={() => setActiveTab('invoices')}
+          >
+            🧾 Invoices
           </button>
         </div>
 
@@ -1294,7 +1507,13 @@ function ProductMaster() {
                         src={imagePreview} 
                         alt="preview" 
                         style={{ maxWidth: '200px', maxHeight: '200px', borderRadius: '4px' }}
-                        onError={(e) => {e.target.src = 'https://via.placeholder.com/200?text=Invalid+URL'; }}
+                        onLoad={() => {
+                          console.log('✅ Image preview loaded successfully:', imagePreview);
+                        }}
+                        onError={(e) => {
+                          console.error('❌ Image preview failed to load:', imagePreview);
+                          e.target.src = 'https://via.placeholder.com/200?text=Invalid+URL';
+                        }}
                       />
                     </div>
                   )}
@@ -1329,9 +1548,15 @@ function ProductMaster() {
                     {productImages.map(image => (
                       <tr key={image.image_id}>
                         <td>{image.image_id}</td>
-                        <td>{getProductName(image.product_id)}</td>
+                        <td>{getProductName(image.productID)}</td>
                         <td>
-                          <a href={image.image_url} target="_blank" rel="noopener noreferrer" style={{ color: '#007bff', textDecoration: 'none' }}>
+                          <a 
+                            href={image.imageUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            style={{ color: '#007bff', textDecoration: 'none' }}
+                            onClick={() => console.log('🖼️ Opening image URL:', image.imageUrl)}
+                          >
                             View
                           </a>
                         </td>
@@ -1344,7 +1569,10 @@ function ProductMaster() {
                         <td>
                           <button
                             className="btn-edit"
-                            onClick={() => handleEditImage(image)}
+                            onClick={() => {
+                              console.log('✏️ Editing image:', image);
+                              handleEditImage(image);
+                            }}
                           >
                             Edit
                           </button>
@@ -1363,6 +1591,94 @@ function ProductMaster() {
                 {productImages.length === 0 && (
                   <p style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
                     No images added yet. Create one using the form above.
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Invoices / Inventory Tab */}
+          {activeTab === 'invoices' && (
+            <section className="tab-section">
+              <h2>Manage Product Invoices / Inventory</h2>
+
+              <div className="form-container">
+                <form onSubmit={handleInventorySubmit} className="master-form">
+                  <h3>{editingInventory ? 'Edit Inventory' : 'Add Inventory'}</h3>
+
+                  <div className="form-group">
+                    <label>Product *</label>
+                    <select
+                      required
+                      value={inventoryForm.product_id}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, product_id: e.target.value })}
+                    >
+                      <option value="">Select a product</option>
+                      {products.map(prod => (
+                        <option key={prod.product_id} value={prod.product_id}>
+                          {prod.product_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Quantity *</label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={inventoryForm.quantity}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, quantity: e.target.value })}
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="form-actions">
+                    <button type="submit" className="btn-primary" disabled={loading}>
+                      {loading ? 'Saving...' : editingInventory ? 'Update' : 'Add'}
+                    </button>
+                    {editingInventory && (
+                      <button type="button" className="btn-secondary" onClick={handleCancelEditInventory}>
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+
+              {/* Invoices Table */}
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Product</th>
+                      <th>Quantity Available</th>
+                      <th>Warehouse</th>
+                      <th>Last Updated</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventories.map(item => (
+                      <tr key={item.inventory_id}>
+                        <td>{item.inventory_id}</td>
+                        <td>{getProductName(item.product_id)}</td>
+                        <td>{item.quantity_available !== undefined ? item.quantity_available : item.quantity}</td>
+                        <td>{item.warehouse_id || 'Main'}</td>
+                        <td>{item.last_updated ? new Date(item.last_updated).toLocaleDateString() : 'N/A'}</td>
+                        <td>
+                          <button className="btn-edit" onClick={() => handleEditInventory(item)}>Edit</button>
+                          <button className="btn-delete" onClick={() => handleDeleteInventory(item.inventory_id)} style={{ marginLeft: '8px', backgroundColor: '#dc3545' }}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {inventories.length === 0 && (
+                  <p style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                    No invoice/inventory entries yet. Create one using the form above.
                   </p>
                 )}
               </div>
