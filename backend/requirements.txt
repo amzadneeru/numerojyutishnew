@@ -8,3 +8,4 @@ werkzeug
 authlib
 requests
 twilio
+cloudinary
