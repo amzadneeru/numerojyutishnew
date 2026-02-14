@@ -1309,6 +1309,14 @@ app.register_blueprint(product_bp)
 from inventory_routes import inventory_bp
 app.register_blueprint(inventory_bp)
 
+# Order routes moved to order_routes.py (blueprint)
+from order_routes import order_bp
+app.register_blueprint(order_bp)
+
+# User address management routes
+from user_address_routes import user_address_bp
+app.register_blueprint(user_address_bp)
+
 
 # Product routes moved to `product_routes.py` blueprint (registered earlier).
 

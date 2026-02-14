@@ -863,7 +863,7 @@ def get_product_details():
                 """
                 SELECT product_id, product_name, product_description, category_name, category_description, 
                        pricing_id, country_code, state_code, currency_code, base_price, discount_percent, 
-                       is_tax_inclusive, tax_id, tax_name, tax_percent, product_active, pricing_active
+                       is_tax_inclusive, tax_id, tax_name, tax_percent, product_active, pricing_active,quantity_available
                 FROM numerojyutishdb.product_details
                 WHERE country_code = %s
                 """
@@ -874,7 +874,7 @@ def get_product_details():
                 """
                 SELECT product_id, product_name, product_description, category_name, category_description, 
                        pricing_id, country_code, state_code, currency_code, base_price, discount_percent, 
-                       is_tax_inclusive, tax_id, tax_name, tax_percent, product_active, pricing_active
+                       is_tax_inclusive, tax_id, tax_name, tax_percent, product_active, pricing_active,quantity_available
                 FROM numerojyutishdb.product_details
                 """
             )
@@ -933,7 +933,9 @@ def get_product_details():
                 'tax_percent': float(r[14]) if r[14] else None,
                 'product_active': r[15],
                 'pricing_active': r[16],
-                'images': images_by_product.get(product_id, [])
+                'quantity_available': r[17] if len(r) > 17 else None,
+                'images': images_by_product.get(product_id, []),
+                
             }
             products.append(product)
         
