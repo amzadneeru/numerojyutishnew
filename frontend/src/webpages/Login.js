@@ -35,6 +35,8 @@ function Login() {
         localStorage.setItem('authToken', data.token);
         localStorage.setItem('userId', data.user_id);
         localStorage.setItem('email', data.email);
+
+        console.info('Login successful:', data.user_id);
         setMsg('Login successful!');
         // Navigate to products page after successful login
         setTimeout(() => navigate('/products'), 1000);

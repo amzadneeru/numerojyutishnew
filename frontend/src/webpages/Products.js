@@ -14,6 +14,11 @@ function Products() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sortBy, setSortBy] = useState('name');
   const [countryCode, setCountryCode] = useState('IN');
+  const [inventories, setInventories] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [quickViewQuantity, setQuickViewQuantity] = useState(1);
 
   const userEmail = localStorage.getItem('email') || 'User';
   const userInitials = userEmail.charAt(0).toUpperCase();
@@ -52,6 +57,37 @@ function Products() {
 
     fetchCategories();
   }, [API_URL]);
+
+  // Fetch inventory data
+  useEffect(() => {
+    const fetchInventories = async () => {
+      try {
+        console.log('📦 Fetching inventories from:', `${API_URL}/api/inventory-stock`);
+        const res = await fetch(`${API_URL}/api/inventory-stock`, {
+          method: 'GET',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+          }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const inv = data.data || [];
+          console.log('✅ Inventories fetched:', inv.length, 'items');
+          setInventories(inv);
+        } else {
+          console.error('❌ Failed to fetch inventories. Status:', res.status);
+          setInventories([]);
+        }
+      } catch (err) {
+        console.error('❌ Error fetching inventories:', err);
+        setInventories([]);
+      }
+    };
+
+    fetchInventories();
+  }, [API_URL, authToken]);
 
   // Fetch products with pricing and tax information
   useEffect(() => {
@@ -104,6 +140,18 @@ function Products() {
 
     fetchProducts();
   }, [API_URL, countryCode, authToken]);
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('shoppingCart');
+    if (savedCart) {
+      try {
+        setCart(JSON.parse(savedCart));
+      } catch (err) {
+        console.error('Error loading cart:', err);
+      }
+    }
+  }, []);
 
   // Filter and search products
   useEffect(() => {
@@ -174,24 +222,117 @@ function Products() {
     navigate('/registration-wizard');
   };
 
-  const handleProductClick = (productId) => {
-    if (!productId) {
-      console.error('Product ID is missing');
+  const handleProductClick = (product) => {
+    if (!product || !product.product_id) {
+      console.error('Product data is missing');
       return;
     }
-    console.log('Navigating to product:', productId);
-    navigate(`/product-details/${productId}`);
+    setSelectedProduct(product);
+    setQuickViewQuantity(1);
+  };
+
+  const closeProductDetail = () => {
+    setSelectedProduct(null);
+    setQuickViewQuantity(1);
   };
 
   const handleAddToCart = (e, productId) => {
     e.stopPropagation();
-    // TODO: Implement add to cart functionality
-    console.log('Add to cart:', productId);
+    
+    const product = products.find(p => p.product_id === productId);
+    if (!product) {
+      console.error('Product not found:', productId);
+      return;
+    }
+
+    const quantity = selectedProduct?.product_id === productId ? quickViewQuantity : 1;
+    const stockQuantity = getProductQuantity(productId);
+
+    // Check if product is out of stock
+    if (stockQuantity === 0) {
+      setSuccessMessage('❌ Product is out of stock');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      return;
+    }
+
+    // Check if quantity exceeds available stock
+    if (quantity > stockQuantity) {
+      setSuccessMessage(`❌ Only ${stockQuantity} item(s) available in stock`);
+      setTimeout(() => setSuccessMessage(''), 3000);
+      return;
+    }
+
+    // Create cart item
+    const cartItem = {
+      product_id: productId,
+      product_name: product.product_name,
+      base_price: product.pricing?.[0]?.final_price || product.base_price,
+      quantity: quantity,
+      image: getProductImage(product),
+      tax_percent: product.pricing?.[0]?.tax_percent || 0
+    };
+
+    // Add to cart
+    const updatedCart = [...cart];
+    const existingItem = updatedCart.find(item => item.product_id === productId);
+
+    if (existingItem) {
+      const newQty = existingItem.quantity + quantity;
+      if (newQty > stockQuantity) {
+        setSuccessMessage(`❌ Only ${stockQuantity} item(s) available in stock`);
+        setTimeout(() => setSuccessMessage(''), 3000);
+        return;
+      }
+      existingItem.quantity = newQty;
+      setSuccessMessage(`✓ Updated quantity to ${newQty} in cart`);
+    } else {
+      updatedCart.push(cartItem);
+      setSuccessMessage(`✓ ${product.product_name} added to cart`);
+    }
+
+    setCart(updatedCart);
+    localStorage.setItem('shoppingCart', JSON.stringify(updatedCart));
+    
+    setTimeout(() => setSuccessMessage(''), 3000);
+    closeProductDetail();
+  };
+
+  // Buy now from Products page: replace cart with single item and go to shopping checkout
+  const handleBuyNow = (e, productId) => {
+    e?.stopPropagation();
+    const product = products.find(p => p.product_id === productId);
+    if (!product) {
+      console.error('Product not found for Buy Now:', productId);
+      return;
+    }
+
+    const cartItem = {
+      cart_id: Date.now(),
+      product_id: product.product_id,
+      product_name: product.product_name,
+      price: product.pricing?.[0]?.final_price || product.base_price || 0,
+      quantity: selectedProduct?.product_id === productId ? quickViewQuantity : 1
+    };
+
+    const singleCart = [cartItem];
+    setCart(singleCart);
+    localStorage.setItem('shoppingCart', JSON.stringify(singleCart));
+
+    // Navigate to the shopping page checkout view
+    navigate('/shopping');
+    // ensure shopping page shows checkout - it reads localStorage; fallback: set query param
+    closeProductDetail();
   };
 
   const getCategoryName = (categoryId) => {
     const category = categories.find(c => c.category_id === categoryId);
     return category?.category_name || 'Uncategorized';
+  };
+
+  const getProductQuantity = (productId) => {
+    const inventory = inventories.find(i => i.product_id === productId);
+    if (!inventory) return 0;
+    return inventory.quantity_available !== undefined ? inventory.quantity_available : inventory.quantity || 0;
   };
 
   const getProductImage = (product) => {
@@ -222,8 +363,8 @@ function Products() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <button className="cart-button">
-            🛒 Cart <span className="badge">0</span>
+          <button className="cart-button" onClick={() => navigate('/shop')}>
+            🛒 Cart <span className="badge">{cart.length}</span>
           </button>
           <div className="user-menu-container">
             <button
@@ -363,12 +504,14 @@ function Products() {
                     const finalPrice = primaryPricing?.final_price || 0;
                     const basePrice = primaryPricing?.base_price || 0;
                     const taxPercent = primaryPricing?.tax_percent || 0;
+                    const quantity = getProductQuantity(product.product_id);
+                    const isOutOfStock = quantity === 0;
 
                     return (
                       <div
                         key={product.product_id}
-                        className="product-card"
-                        onClick={() => handleProductClick(product.product_id)}
+                        className={`product-card ${isOutOfStock ? 'out-of-stock' : ''}`}
+                        onClick={() => handleProductClick(product)}
                       >
                         <div className="product-image-container">
                           <img
@@ -376,8 +519,10 @@ function Products() {
                             alt={product.product_name}
                             className="product-image"
                           />
-                          {!product.is_active && (
-                            <div className="product-badge inactive">Out of Stock</div>
+                          {isOutOfStock && (
+                            <div className="product-badge out-of-stock-badge">
+                              <span>Out of Stock</span>
+                            </div>
                           )}
                         </div>
 
@@ -404,13 +549,32 @@ function Products() {
                             )}
                           </div>
 
-                          <button
-                            className={`add-to-cart-btn ${!product.is_active ? 'disabled' : ''}`}
-                            onClick={(e) => handleAddToCart(e, product.product_id)}
-                            disabled={!product.is_active}
-                          >
-                            {product.is_active ? '🛒 Add to Cart' : '❌ Unavailable'}
-                          </button>
+                          <div className="product-stock">
+                            <span className={`stock-badge ${getProductQuantity(product.product_id) > 0 ? 'in-stock' : 'out-of-stock'}`}>
+                              {getProductQuantity(product.product_id) > 0 
+                                ? `✓ In Stock (${getProductQuantity(product.product_id)})`
+                                : '✗ Out of Stock'
+                              }
+                            </span>
+                          </div>
+
+                          <div className="card-actions">
+                            <button
+                              className={`buy-now-btn ${getProductQuantity(product.product_id) === 0 ? 'disabled' : ''}`}
+                              onClick={(e) => handleBuyNow(e, product.product_id)}
+                              disabled={getProductQuantity(product.product_id) === 0}
+                            >
+                              🛒 Buy Now
+                            </button>
+
+                            <button
+                              className={`add-to-cart-btn ${getProductQuantity(product.product_id) === 0 ? 'disabled' : ''}`}
+                              onClick={(e) => handleAddToCart(e, product.product_id)}
+                              disabled={getProductQuantity(product.product_id) === 0}
+                            >
+                              {getProductQuantity(product.product_id) > 0 ? '➕ Add to Cart' : '❌ Out of Stock'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -433,6 +597,105 @@ function Products() {
       <footer className="products-footer">
         <p>&copy; 2024 NUMRO JYOTISH. All rights reserved.</p>
       </footer>
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="success-toast">
+          {successMessage}
+        </div>
+      )}
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <div className="product-detail-overlay" onClick={closeProductDetail}>
+          <div className="product-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={closeProductDetail}>✕</button>
+            
+            <div className="modal-content">
+              <div className="modal-image">
+                <img src={getProductImage(selectedProduct)} alt={selectedProduct.product_name} />
+              </div>
+
+              <div className="modal-info">
+                <h2>{selectedProduct.product_name}</h2>
+                <p className="modal-category">{getCategoryName(selectedProduct.category_id)}</p>
+
+                {selectedProduct.product_description && (
+                  <p className="modal-description">{selectedProduct.product_description}</p>
+                )}
+
+                <div className="modal-pricing">
+                  <div className="price-row">
+                    <span>Base Price:</span>
+                    <span className="original-price">₹{selectedProduct.base_price}</span>
+                  </div>
+                  <div className="price-row">
+                    <span>Final Price:</span>
+                    <span className="final-price">₹{selectedProduct.pricing?.[0]?.final_price || selectedProduct.base_price}</span>
+                  </div>
+                  {selectedProduct.pricing?.[0]?.tax_percent > 0 && (
+                    <div className="price-row">
+                      <span>Tax ({selectedProduct.pricing?.[0]?.tax_percent}%):</span>
+                      <span>₹{((selectedProduct.pricing?.[0]?.final_price || selectedProduct.base_price) * selectedProduct.pricing?.[0]?.tax_percent / 100).toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="modal-stock">
+                  {getProductQuantity(selectedProduct.product_id) > 0 ? (
+                    <span className="in-stock">✓ In Stock ({getProductQuantity(selectedProduct.product_id)})</span>
+                  ) : (
+                    <span className="out-of-stock">✗ Out of Stock</span>
+                  )}
+                </div>
+
+                <div className="modal-actions">
+                  <div className="qty-selector">
+                    <label>Quantity:</label>
+                    <div className="qty-controls">
+                      <button 
+                        onClick={() => setQuickViewQuantity(Math.max(1, quickViewQuantity - 1))}
+                        disabled={quickViewQuantity === 1}
+                      >
+                        −
+                      </button>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max={getProductQuantity(selectedProduct.product_id)} 
+                        value={quickViewQuantity}
+                        onChange={(e) => setQuickViewQuantity(Math.min(getProductQuantity(selectedProduct.product_id), Math.max(1, parseInt(e.target.value))))}
+                      />
+                      <button 
+                        onClick={() => setQuickViewQuantity(Math.min(getProductQuantity(selectedProduct.product_id), quickViewQuantity + 1))}
+                        disabled={quickViewQuantity >= getProductQuantity(selectedProduct.product_id)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <button 
+                    className="modal-add-to-cart-btn"
+                    onClick={(e) => handleAddToCart(e, selectedProduct.product_id)}
+                    disabled={getProductQuantity(selectedProduct.product_id) === 0}
+                  >
+                    🛒 Add to Cart
+                  </button>
+                  <button
+                    className="modal-buy-now-btn"
+                    onClick={(e) => handleBuyNow(e, selectedProduct.product_id)}
+                    disabled={getProductQuantity(selectedProduct.product_id) === 0}
+                    style={{ marginLeft: '8px' }}
+                  >
+                    🛒 Buy Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

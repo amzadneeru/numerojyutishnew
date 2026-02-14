@@ -42,6 +42,11 @@ function App() {
       });
       const data = await res.json();
       if (res.ok) {
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('userId', data.user_id);
+        localStorage.setItem('email', data.email);
+
+        console.info('Login successful:', data.user_id);
         setMsg('Login successful');
         navigate('/subscription-plan');
       } else {

@@ -4,4 +4,6 @@ API key	681474847554242
 API secret iy_gL3QcHlOUQgdQUsci23oiMaM
 CLOUDINARY_URL=cloudinary://681474847554242:iy_gL3QcHlOUQgdQUsci23oiMaM@dxmms0imh	
 
+https://numerojyutish.onrender.com/api/product-details?country_code=IN
+
 

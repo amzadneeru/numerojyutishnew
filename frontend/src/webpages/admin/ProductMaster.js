@@ -800,6 +800,12 @@ function ProductMaster() {
     return product?.product_name || 'N/A';
   };
 
+  const getProductQuantity = (productId) => {
+    const inventory = inventories.find(i => i.product_id === productId);
+    if (!inventory) return 'N/A';
+    return inventory.quantity_available !== undefined ? inventory.quantity_available : inventory.quantity || 'N/A';
+  };
+
   const getCountryName = (countryCode) => {
     const country = countries.find(c => c.code === countryCode);
     return country?.name || countryCode;
@@ -1063,6 +1069,7 @@ function ProductMaster() {
                       <th>Category</th>
                       <th>Name</th>
                       <th>Description</th>
+                      <th>Quantity Available</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
@@ -1074,6 +1081,14 @@ function ProductMaster() {
                         <td>{getCategoryName(product.category_id)}</td>
                         <td>{product.product_name}</td>
                         <td>{product.product_description || 'N/A'}</td>
+                        <td>
+                          <span style={{ 
+                            fontWeight: 'bold',
+                            color: getProductQuantity(product.product_id) === 'N/A' ? '#999' : getProductQuantity(product.product_id) > 0 ? '#28a745' : '#dc3545'
+                          }}>
+                            {getProductQuantity(product.product_id)}
+                          </span>
+                        </td>
                         <td>
                           <span className={`status ${product.is_active ? 'active' : 'inactive'}`}>
                             {product.is_active ? '✓ Active' : '✗ Inactive'}

@@ -12,7 +12,7 @@ import SocialCallback from './webpages/SocialCallback';
 import reportWebVitals from './reportWebVitals';
 import Products from './webpages/Products';
 import ProductMaster from './webpages/admin/ProductMaster';
-
+import Shopping from './webpages/Shopping';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -31,6 +31,7 @@ root.render(
         <Route path="/subscription-plan" element={<SubscriptionPlan />} />
         <Route path="/auth/callback/:provider" element={<SocialCallback />} />
         <Route path="/social-callback" element={<SocialCallback />} />
+        <Route path="/shopping" element={<Shopping/>} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

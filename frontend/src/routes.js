@@ -10,6 +10,7 @@ import SubscriptionPlan from './webpages/SubscriptionPlan';
 import Products from './webpages/Products';
 import ProductDetails from './webpages/ProductDetails';
 import ProductMaster from './webpages/admin/ProductMaster';
+import Shopping from './webpages/Shopping';
 
 export const router = createBrowserRouter([
   {
@@ -55,5 +56,9 @@ export const router = createBrowserRouter([
   {
     path: '/admin/productmaster',
     element: <ProductMaster />,
+  },
+  {
+    path: '/shopping',
+    element: <Shopping />,
   },
 ]);
