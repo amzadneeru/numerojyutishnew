@@ -11,8 +11,10 @@ function Dashboard() {
   const menuItems = [
     { path: '/shopping', icon: '🛍️', label: 'Online Store', desc: 'Browse and purchase products' },
     { path: '/products', icon: '📦', label: 'Products', desc: 'View all available products' },
+    { path: '/consult-astrologers', icon: '⭐', label: 'Consult Astrologers', desc: 'Connect with expert astrologers' },
     { path: '/subscription-plan', icon: '💳', label: 'Subscription Plans', desc: 'Manage your subscription' },
-    { path: '/admin/productmaster', icon: '⚙️', label: 'Admin Panel', desc: 'Manage products & inventory' },
+    { path: '/admin/productmaster', icon: '⚙️', label: 'Product Master', desc: 'Manage products & inventory' },
+    { path: '/admin/astrologermaster', icon: '🔮', label: 'Astrologer Master', desc: 'Manage astrologers' },
   ];
 
   const handleLogout = () => {
@@ -44,6 +46,9 @@ function Dashboard() {
               <div className="dropdown-divider"></div>
               <button className="dropdown-item" onClick={() => navigate('/dashboard')}>
                 📊 My Dashboard
+              </button>
+              <button className="dropdown-item" onClick={() => navigate('/consult-astrologers')}>
+                ⭐ Consult Astrologers
               </button>
               <button className="dropdown-item" onClick={() => navigate('/shop')}>
                 🛍️ Go to Store

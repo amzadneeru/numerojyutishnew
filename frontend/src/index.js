@@ -12,6 +12,8 @@ import SocialCallback from './webpages/SocialCallback';
 import reportWebVitals from './reportWebVitals';
 import Products from './webpages/Products';
 import ProductMaster from './webpages/admin/ProductMaster';
+import ConsultAstrologers from './webpages/ConsultAstrologers';
+import AstrologerMaster from './webpages/admin/AstrologerMaster';
 import Shopping from './webpages/Shopping';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
@@ -32,6 +34,9 @@ root.render(
         <Route path="/auth/callback/:provider" element={<SocialCallback />} />
         <Route path="/social-callback" element={<SocialCallback />} />
         <Route path="/shopping" element={<Shopping/>} />
+        <Route path="/consult-astrologers" element={<ConsultAstrologers />} />
+        <Route path="/consult-astrologers/:astroId" element={<ConsultAstrologers />} />
+        <Route path="/admin/astrologermaster" element={<AstrologerMaster />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

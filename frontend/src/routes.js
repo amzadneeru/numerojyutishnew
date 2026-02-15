@@ -10,12 +10,15 @@ import SubscriptionPlan from './webpages/SubscriptionPlan';
 import Products from './webpages/Products';
 import ProductDetails from './webpages/ProductDetails';
 import ProductMaster from './webpages/admin/ProductMaster';
+import AstrologerMaster from './webpages/admin/AstrologerMaster';
 import Shopping from './webpages/Shopping';
+import ConsultAstrologers from './webpages/ConsultAstrologers';
+import Layout from './layouts/Layout';
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <App />,
+    element: <Layout><App /></Layout>,
   },
   {
     path: '/login',
@@ -31,11 +34,11 @@ export const router = createBrowserRouter([
   },
   {
     path: '/registration-wizard',
-    element: <RegistrationWizard />,
+    element: <Layout><RegistrationWizard /></Layout>,
   },
   {
     path: '/dashboard',
-    element: <Dashboard />,
+    element: <Layout><Dashboard /></Layout>,
   },
   {
     path: '/forgot-password',
@@ -43,22 +46,34 @@ export const router = createBrowserRouter([
   },
   {
     path: '/subscription-plan',
-    element: <SubscriptionPlan />,
+    element: <Layout><SubscriptionPlan /></Layout>,
   },
   {
     path: '/products',
-    element: <Products/>,
+    element: <Layout><Products /></Layout>,
   },
   {
     path: '/product-details/:productId',
-    element: <ProductDetails/>,
+    element: <Layout><ProductDetails /></Layout>,
   },
   {
     path: '/admin/productmaster',
-    element: <ProductMaster />,
+    element: <Layout><ProductMaster /></Layout>,
+  },
+  {
+    path: '/admin/astrologermaster',
+    element: <Layout><AstrologerMaster /></Layout>,
   },
   {
     path: '/shopping',
-    element: <Shopping />,
+    element: <Layout><Shopping /></Layout>,
+  },
+  {
+    path: '/consult-astrologers',
+    element: <Layout><ConsultAstrologers /></Layout>,
+  },
+  {
+    path: '/consult-astrologers/:astroId',
+    element: <Layout><ConsultAstrologers /></Layout>,
   },
 ]);
