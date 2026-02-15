@@ -1317,6 +1317,10 @@ app.register_blueprint(order_bp)
 from user_address_routes import user_address_bp
 app.register_blueprint(user_address_bp)
 
+# Astrologer consultation routes
+from astrologer_routes import astrologer_bp
+app.register_blueprint(astrologer_bp)
+
 
 # Product routes moved to `product_routes.py` blueprint (registered earlier).
 
