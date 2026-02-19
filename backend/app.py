@@ -4,6 +4,7 @@ from pathlib import Path
 from flask import Flask, request, jsonify, redirect, send_from_directory
 from flask_cors import CORS
 import psycopg2
+from psycopg2.extras import RealDictCursor
 import secrets
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
@@ -712,6 +713,314 @@ def update_user_profile(user_id):
         except Exception:
             pass
         return jsonify(success=False, message=f'Error updating user profile: {str(e)}'), 500
+
+
+@app.route('/api/users', methods=['GET'])
+def list_users():
+    """
+    List users with optional search and pagination.
+    Query params:
+    - q: search string (matches full_name, email, phone_no, username)
+    - limit: number of results (default 50)
+    - offset: pagination offset (default 0)
+    """
+    auth_header = request.headers.get('Authorization', '')
+    token = None
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+
+    if not token:
+        return jsonify(success=False, message='Authorization token required'), 401
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Verify token exists
+        cur.execute(
+            "SELECT user_id FROM numerojyutishdb.users WHERE authtoken = %s",
+            (token,)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='Unauthorized'), 403
+
+        search_query = request.args.get('q', '').strip()
+        limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
+
+        query = """
+            Select user_id, full_name, email, dob, gender, status, created_at, phone, user_role, role_name, role_description, relationship_code, relationship_status_key, professional_code, profession_key, professional_status_code, professional_status_key
+            FROM numerojyutishdb.v_user_profile
+        """
+        params = []
+
+        if search_query:
+            query += " WHERE (full_name ILIKE %s OR email ILIKE %s OR phone_no ILIKE %s OR username ILIKE %s)"
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param, search_param])
+
+        query += " ORDER BY user_id DESC LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+
+        cur.execute(query, params)
+        rows = cur.fetchall()
+
+        count_query = "SELECT COUNT(*) FROM numerojyutishdb.v_user_profile"
+        count_params = []
+        if search_query:
+            count_query += " WHERE (full_name ILIKE %s OR email ILIKE %s OR phone_no ILIKE %s OR username ILIKE %s)"
+            count_params.extend([search_param, search_param, search_param, search_param])
+
+        cur.execute(count_query, count_params)
+        count_row = cur.fetchone()
+        total_count = count_row.get('count', 0) if count_row else 0
+
+        cur.close()
+        conn.close()
+
+        users = [
+            {
+                'user_id': row['user_id'],
+                'full_name': row['full_name'],
+                'email': row['email'],
+                'phone_no': row['phone'],
+                'username': row['email'],
+                'dob': row['dob'].isoformat() if row['dob'] else None,
+                'gender': row['gender'],
+                'status': row['status'],
+                'user_role': row['user_role'],
+                'role_name': row['role_name'],
+                'role_description': row['role_description'],
+                'relationship_code': row['relationship_code'],
+                'relationship_status_key': row['relationship_status_key'],
+                'professional_code': row['professional_code'],
+                'profession_key': row['profession_key'],
+                'professional_status_code': row['professional_status_code'],
+                'professional_status_key': row['professional_status_key'],
+                'created_at': row['created_at'].isoformat() if row['created_at'] else None#,
+                #'updated_at': row['updated_at'].isoformat() if row['updated_at'] else None
+            }
+            for row in rows
+        ]
+
+        return jsonify(
+            success=True,
+            data=users,
+            pagination={
+                'total': total_count,
+                'limit': limit,
+                'offset': offset,
+                'count': len(users)
+            }
+        ), 200
+
+    except Exception as e:
+        logging.error(f"Error listing users: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error listing users: {str(e)}'), 500
+
+
+@app.route('/api/users/<int:user_id>/profile', methods=['GET'])
+def get_user_by_user_id(user_id):
+    """
+    Get a single user by user_id.
+    """
+    auth_header = request.headers.get('Authorization', '')
+    token = None
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+
+    if not token:
+        return jsonify(success=False, message='Authorization token required'), 401
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Verify token exists
+        cur.execute(
+            "SELECT user_id FROM numerojyutishdb.users WHERE authtoken = %s",
+            (token,)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='Unauthorized'), 403
+
+        cur.execute(
+            """
+            SELECT user_id, full_name, email, dob, gender, status, created_at,
+                   phone, user_role, role_name, role_description,
+                   relationship_code, relationship_status_key,
+                   professional_code, profession_key,
+                   professional_status_code, professional_status_key
+            FROM numerojyutishdb.v_user_profile
+            WHERE user_id = %s
+            """,
+            (user_id,)
+        )
+
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not row:
+            return jsonify(success=False, message='User not found'), 404
+
+        user = {
+            'user_id': row['user_id'],
+            'full_name': row['full_name'],
+            'email': row['email'],
+            'phone_no': row['phone'],
+            'username': row['email'],
+            'dob': row['dob'].isoformat() if row['dob'] else None,
+            'gender': row['gender'],
+            'status': row['status'],
+            'user_role': row['user_role'],
+            'role_name': row['role_name'],
+            'role_description': row['role_description'],
+            'relationship_code': row['relationship_code'],
+            'relationship_status_key': row['relationship_status_key'],
+            'professional_code': row['professional_code'],
+            'profession_key': row['profession_key'],
+            'professional_status_code': row['professional_status_code'],
+            'professional_status_key': row['professional_status_key'],
+            'created_at': row['created_at'].isoformat() if row['created_at'] else None
+        }
+
+        return jsonify(success=True, data=user), 200
+
+    except Exception as e:
+        logging.error(f"Error fetching user {user_id}: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error fetching user: {str(e)}'), 500
+
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+def update_user_admin(user_id):
+    """
+    Admin update for user email/phone.
+    Expected JSON (any subset):
+    {
+        "email": "user@example.com",
+        "phone_no": "9876543210",
+        "full_name": "User Name"
+    }
+    """
+    auth_header = request.headers.get('Authorization', '')
+    token = None
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+
+    if not token:
+        return jsonify(success=False, message='Authorization token required'), 401
+
+    data = request.get_json() or {}
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Verify token exists
+        cur.execute(
+            "SELECT user_id FROM numerojyutishdb.users WHERE authtoken = %s",
+            (token,)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='Unauthorized'), 403
+
+        email = data.get('email')
+        phone_no = data.get('phone_no') or data.get('phoneNo')
+        full_name = data.get('full_name')
+
+        update_fields = []
+        params = []
+
+        if full_name is not None:
+            update_fields.append("full_name = %s")
+            params.append(full_name)
+        if email is not None:
+            update_fields.append("email = %s")
+            params.append(email)
+        if phone_no is not None:
+            update_fields.append("phone_no = %s")
+            params.append(phone_no)
+
+        if not update_fields:
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='No fields to update'), 400
+
+        params.append(user_id)
+
+        query = f"""
+            UPDATE numerojyutishdb.users
+            SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = %s
+            RETURNING user_id, full_name, email, phone_no, username
+        """
+
+        cur.execute(query, params)
+        result = cur.fetchone()
+
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='User not found'), 404
+
+        # Keep security table in sync if email or phone updated
+        if email is not None:
+            cur.execute(
+                "UPDATE numerojyutishdb.security SET email = %s WHERE user_id = %s",
+                (email, user_id)
+            )
+        if phone_no is not None:
+            cur.execute(
+                "UPDATE numerojyutishdb.security SET phone = %s WHERE user_id = %s",
+                (phone_no, user_id)
+            )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify(
+            success=True,
+            message='User updated successfully',
+            data={
+                'user_id': result[0],
+                'full_name': result[1],
+                'email': result[2],
+                'phone_no': result[3],
+                'username': result[4]
+            }
+        ), 200
+
+    except psycopg2.IntegrityError as e:
+        logging.error(f"Integrity error updating user: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify(success=False, message='Duplicate value or constraint violation'), 409
+    except Exception as e:
+        logging.error(f"Error updating user {user_id}: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error updating user: {str(e)}'), 500
 
 
 # Subscription Plans endpoints
