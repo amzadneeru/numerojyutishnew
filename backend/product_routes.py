@@ -955,6 +955,110 @@ def get_product_details():
         return jsonify(success=False, message=f'Error fetching product details: {str(e)}'), 500
 
 
+@product_bp.route('/api/product-details/<int:product_id>', methods=['GET'])
+def get_product_details_by_id(product_id):
+    try:
+        logging.info(f"📦 [GET_PRODUCT_DETAILS_BY_ID] Fetching product details for product_id={product_id}")
+
+        country_code = request.args.get('country_code')
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Fetch single product detail
+        if country_code:
+            cur.execute(
+                """
+                SELECT product_id, product_name, product_description, category_name, category_description,
+                       pricing_id, country_code, state_code, currency_code, base_price, discount_percent,
+                       is_tax_inclusive, tax_id, tax_name, tax_percent, product_active, pricing_active, quantity_available
+                FROM numerojyutishdb.product_details
+                WHERE product_id = %s AND country_code = %s
+                """,
+                (product_id, country_code)
+            )
+        else:
+            cur.execute(
+                """
+                SELECT product_id, product_name, product_description, category_name, category_description,
+                       pricing_id, country_code, state_code, currency_code, base_price, discount_percent,
+                       is_tax_inclusive, tax_id, tax_name, tax_percent, product_active, pricing_active, quantity_available
+                FROM numerojyutishdb.product_details
+                WHERE product_id = %s
+                """,
+                (product_id,)
+            )
+
+        rows = cur.fetchall()
+        if not rows:
+            cur.close()
+            conn.close()
+            return jsonify(success=False, message='Product details not found'), 404
+
+        # Fetch product images
+        cur.execute(
+            """
+            SELECT product_id, image_id, image_url, is_primary, created_at
+            FROM numerojyutishdb.product_images
+            WHERE product_id = %s
+            ORDER BY is_primary DESC, image_id
+            """,
+            (product_id,)
+        )
+
+        image_rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        images = [
+            {
+                'productID': img_row[0],
+                'imageUrl': img_row[2],
+                'image_id': img_row[1],
+                'is_primary': img_row[3],
+                'created_at': img_row[4].isoformat() if img_row[4] else None
+            }
+            for img_row in image_rows
+        ]
+
+        # If multiple country rows exist, return as list preserving current data model
+        product_details = []
+        for r in rows:
+            product_details.append({
+                'product_id': r[0],
+                'product_name': r[1],
+                'product_description': r[2],
+                'category_name': r[3],
+                'category_description': r[4],
+                'pricing_id': r[5],
+                'country_code': r[6],
+                'state_code': r[7],
+                'currency_code': r[8],
+                'base_price': float(r[9]) if r[9] else None,
+                'discount_percent': float(r[10]) if r[10] else None,
+                'is_tax_inclusive': r[11],
+                'tax_id': r[12],
+                'tax_name': r[13],
+                'tax_percent': float(r[14]) if r[14] else None,
+                'product_active': r[15],
+                'pricing_active': r[16],
+                'quantity_available': r[17] if len(r) > 17 else None,
+                'images': images
+            })
+
+        logging.info(f"✅ [GET_PRODUCT_DETAILS_BY_ID] Retrieved {len(product_details)} row(s) for product_id={product_id}")
+
+        return jsonify(success=True, data=product_details), 200
+
+    except Exception as e:
+        logging.error(f"❌ [GET_PRODUCT_DETAILS_BY_ID] Error fetching product details for product_id={product_id}: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify(success=False, message=f'Error fetching product details: {str(e)}'), 500
+
+
 # --- Additional product routes moved from app.py: delete product/category and image DB CRUD ---
 
 
