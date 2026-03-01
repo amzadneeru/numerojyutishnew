@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import Header from '../components/Header';
 import '../styles/ConsultAstrologers.css';
 
 function ConsultAstrologers() {
@@ -274,6 +275,7 @@ function ConsultAstrologers() {
   if (view === 'profile' && selectedAstrologer) {
     return (
       <div className="consult-container profile-view">
+        <Header />
         <button onClick={() => setView('list')} className="back-btn">← Back to Astrologers</button>
 
         <div className="profile-header">
@@ -321,7 +323,10 @@ function ConsultAstrologers() {
             <p className="fee-display">
               {selectedAstrologer.currency} {selectedAstrologer.consultation_fee}
             </p>
-            <button className="book-consultation-btn">
+            <button
+              className="book-consultation-btn"
+              onClick={() => navigate(`/consult-astrologers/${selectedAstrologer.astrologer_id}/book`)}
+            >
               Book Consultation
             </button>
           </div>
@@ -352,6 +357,7 @@ function ConsultAstrologers() {
   // Default: List View
   return (
     <div className="consult-container">
+      <Header />
       <div className="consult-header">
         <h1>Consult with Expert Astrologers</h1>
         <p>Connect with verified astrologers for personalized insights</p>

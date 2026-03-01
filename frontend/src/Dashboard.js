@@ -1,66 +1,22 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import Header from './components/Header';
 import './styles/dashboard.css';
 
 function Dashboard() {
   const navigate = useNavigate();
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const userEmail = localStorage.getItem('email') || 'User';
-  const userInitials = userEmail.charAt(0).toUpperCase();
 
   const menuItems = [
     { path: '/shopping', icon: '🛍️', label: 'Online Store', desc: 'Browse and purchase products' },
     { path: '/products', icon: '📦', label: 'Products', desc: 'View all available products' },
     { path: '/consult-astrologers', icon: '⭐', label: 'Consult Astrologers', desc: 'Connect with expert astrologers' },
-    { path: '/subscription-plan', icon: '💳', label: 'Subscription Plans', desc: 'Manage your subscription' },
-    { path: '/admin/productmaster', icon: '⚙️', label: 'Product Master', desc: 'Manage products & inventory' },
-    { path: '/admin/astrologermaster', icon: '🔮', label: 'Astrologer Master', desc: 'Manage astrologers' },
+    { path: '/subscription-plan', icon: '💳', label: 'Subscription Plans', desc: 'Manage your subscription' }
   ];
-
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('email');
-    navigate('/login');
-  };
 
   return (
     <div className="dashboard-container">
-      {/* Header */}
-      <header className="dashboard-header">
-        <div className="logo">
-          <h1>NUMRO</h1>
-          <h2>JYOTISH</h2>
-        </div>
-        <h3 className="page-title">Dashboard</h3>
-        <div className="user-menu-container">
-          <button
-            className="user-button"
-            onClick={() => setShowUserMenu(!showUserMenu)}
-          >
-            {userInitials} ▼
-          </button>
-          {showUserMenu && (
-            <div className="user-dropdown">
-              <div className="dropdown-header">{userEmail}</div>
-              <div className="dropdown-divider"></div>
-              <button className="dropdown-item" onClick={() => navigate('/dashboard')}>
-                📊 My Dashboard
-              </button>
-              <button className="dropdown-item" onClick={() => navigate('/consult-astrologers')}>
-                ⭐ Consult Astrologers
-              </button>
-              <button className="dropdown-item" onClick={() => navigate('/shop')}>
-                🛍️ Go to Store
-              </button>
-              <div className="dropdown-divider"></div>
-              <button className="dropdown-item logout" onClick={handleLogout}>
-                🚪 Logout
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="dashboard-main">

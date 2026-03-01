@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Header from '../components/Header';
 import '../styles/Shopping.css';
 
 function Shopping() {
@@ -449,6 +450,7 @@ function Shopping() {
 
   return (
     <div className="shopping-container">
+      <Header />
       {/* Header */}
       <header className="shopping-header">
         <div className="header-left">

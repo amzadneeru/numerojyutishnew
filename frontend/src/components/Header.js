@@ -18,6 +18,8 @@ function Header() {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userId');
     localStorage.removeItem('email');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('isAdmin');
     setShowUserMenu(false);
     navigate('/login');
   };
@@ -86,12 +88,40 @@ function Header() {
                   <button onClick={() => handleNavigation('/consult-astrologers')}>
                     Consult Astrologers
                   </button>
+                  {userId && (
+                    <button onClick={() => handleNavigation('/my-consultation-bookings')}>
+                      My Consultation Bookings
+                    </button>
+                  )}
                   <button onClick={() => handleNavigation('/subscription-plan')}>
                     Subscription Plans
                   </button>
                   <button onClick={() => handleNavigation('/shopping')}>
                     Online Store
                   </button>
+                </div>
+              )}
+            </div>
+
+            {/* Consultation Dropdown */}
+            <div className="nav-item-group">
+              <button
+                className="nav-item dropdown-toggle"
+                onClick={() => toggleSubmenu('consultation')}
+              >
+                📅 Consultation
+                <span className="dropdown-arrow">▼</span>
+              </button>
+              {expandedMenu === 'consultation' && (
+                <div className="dropdown-submenu">
+                  <button onClick={() => handleNavigation('/consult-astrologers')}>
+                    Book Consultation Slot
+                  </button>
+                  {userId && (
+                    <button onClick={() => handleNavigation('/my-consultation-bookings')}>
+                      My Consultation Bookings
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -122,34 +152,6 @@ function Header() {
               </button>
             )}
 
-            {/* Admin Menu - Only show if logged in */}
-            {userId && (
-              <div className="nav-item-group">
-                <button 
-                  className="nav-item dropdown-toggle admin-menu"
-                  onClick={() => toggleSubmenu('admin')}
-                >
-                  ⚙️ Admin
-                  <span className="dropdown-arrow">▼</span>
-                </button>
-                {expandedMenu === 'admin' && (
-                  <div className="dropdown-submenu">
-                    <button onClick={() => handleNavigation('/admin/productmaster')}>
-                      Product Master
-                    </button>
-                    <button onClick={() => handleNavigation('/admin/astrologermaster')}>
-                      Astrologer Master
-                    </button>
-                    <button onClick={() => handleNavigation('/dashboard')}>
-                      Dashboard
-                    </button>
-                    <button onClick={() => handleNavigation('/')}>
-                      Settings
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </nav>
 
           {/* Right Section */}
@@ -185,6 +187,13 @@ function Header() {
                       onClick={() => handleNavigation('/consult-astrologers')}
                     >
                       ⭐ Consult Astrologers
+                    </button>
+
+                    <button
+                      className="dropdown-item"
+                      onClick={() => handleNavigation('/my-consultation-bookings')}
+                    >
+                      📅 My Consultation Bookings
                     </button>
 
                     <button

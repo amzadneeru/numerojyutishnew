@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import '../styles/Login.css';
 import { useNavigate } from 'react-router-dom';
+import Header from '../components/Header';
 
 function Register() {
   const [regFullName, setRegFullName] = useState('');
@@ -64,6 +65,7 @@ function Register() {
 
   return (
     <div className="login-wrapper">
+      <Header />
       <div className="login-box">
         <h1 className="login-title">Create account</h1>
         <input type="text" placeholder="Full name" value={regFullName} onChange={e => setRegFullName(e.target.value)} className="login-input" />

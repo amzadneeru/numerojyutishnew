@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Header from '../components/Header';
 import '../styles/Products.css';
 
 function Products() {
@@ -349,6 +350,7 @@ function Products() {
 
   return (
     <div className="products-container">
+      <Header />
       {/* Header */}
       <header className="products-header">
         <div className="logo">

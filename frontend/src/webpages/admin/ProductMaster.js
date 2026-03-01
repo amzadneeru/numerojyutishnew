@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AdminHeader from '../../components/AdminHeader';
 import '../../styles/ProductMaster.css';
 
 function ProductMaster() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('products');
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   
   // Auth
-  const userEmail = localStorage.getItem('email') || 'User';
-  const userInitials = userEmail.charAt(0).toUpperCase();
   const authToken = localStorage.getItem('authToken');
 
   const API_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5000' : '');
@@ -783,13 +781,6 @@ function ProductMaster() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('email');
-    navigate('/login');
-  };
-
   const getCategoryName = (categoryId) => {
     const category = categories.find(c => c.category_id === categoryId);
     return category?.category_name || 'N/A';
@@ -813,34 +804,7 @@ function ProductMaster() {
 
   return (
     <div className="product-master-container">
-      {/* Header */}
-      <header className="master-header">
-        <div className="logo">
-          <h1>NUMRO</h1>
-          <h2>JYOTISH</h2>
-        </div>
-        <h3 className="page-title">Product Master</h3>
-        <div className="user-menu-container">
-          <button
-            className="user-button"
-            onClick={() => setShowUserMenu(!showUserMenu)}
-          >
-            {userInitials} ▼
-          </button>
-          {showUserMenu && (
-            <div className="user-dropdown">
-              <div className="dropdown-header">{userEmail}</div>
-              <button className="dropdown-item" onClick={() => navigate('/dashboard')}>
-                📊 Dashboard
-              </button>
-              <div className="dropdown-divider"></div>
-              <button className="dropdown-item logout" onClick={handleLogout}>
-                🚪 Logout
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <AdminHeader />
 
       {/* Main Content */}
       <main className="master-main">

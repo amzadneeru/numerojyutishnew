@@ -509,6 +509,178 @@
   border-left: 4px solid #2e7d32;
 }
 
+/* Slot Booking Page */
+.slot-booking-wrap {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.slot-booking-wrap h1 {
+  margin: 0 0 8px;
+  color: #333;
+}
+
+.slot-booking-subtitle {
+  color: #9C3B9C;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.slot-booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.slot-list-section h3 {
+  margin-bottom: 12px;
+  color: #333;
+}
+
+.pricing-estimate-box {
+  background: #f9f5ff;
+  border: 1px solid #e8d8ff;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.pricing-estimate-box p {
+  margin: 6px 0;
+  color: #333;
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.slot-btn {
+  padding: 10px 12px;
+  border: 2px solid #F4B555;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+.slot-btn:hover {
+  background: #FFF5E6;
+}
+
+.slot-btn-selected {
+  background: #9C3B9C;
+  color: white;
+  border-color: #9C3B9C;
+}
+
+.booking-summary-box {
+  background: #f9f5ff;
+  border: 1px solid #e8d8ff;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.booking-summary-box p {
+  margin: 6px 0;
+  color: #333;
+}
+
+.booking-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.booking-card {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.booking-card h3 {
+  margin: 0 0 12px;
+  color: #333;
+}
+
+.booking-card p {
+  margin: 7px 0;
+  color: #555;
+}
+
+.booking-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.booking-action-btn {
+  padding: 10px 12px;
+  border: 1px solid #9C3B9C;
+  border-radius: 8px;
+  background: #fff;
+  color: #9C3B9C;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.booking-action-btn:hover {
+  background: #f7eefe;
+}
+
+.reschedule-box {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #ead7ff;
+  border-radius: 10px;
+  background: #fcf9ff;
+}
+
+.booking-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.booking-modal-card {
+  width: min(520px, 100%);
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.booking-modal-card h3 {
+  margin: 0 0 10px;
+  color: #333;
+}
+
+.booking-modal-card p {
+  margin: 0 0 16px;
+  color: #555;
+}
+
+.booking-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.booking-modal-actions .booking-action-btn,
+.booking-modal-actions .book-consultation-btn {
+  margin-top: 0;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .consult-header h1 {

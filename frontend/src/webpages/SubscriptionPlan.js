@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Header from '../components/Header';
 import '../styles/SubscriptionPlan.css';
 
 function SubscriptionPlan() {
@@ -153,6 +154,7 @@ function SubscriptionPlan() {
 
   return (
     <div className="subscription-container">
+      <Header />
       {/* Header */}
       <header className="subscription-header">
         <div className="logo">

@@ -35,6 +35,12 @@ function Login() {
         localStorage.setItem('authToken', data.token);
         localStorage.setItem('userId', data.user_id);
         localStorage.setItem('email', data.email);
+        if (data.user_role || data.role) {
+          localStorage.setItem('userRole', data.user_role || data.role);
+        }
+        if (typeof data.is_admin !== 'undefined') {
+          localStorage.setItem('isAdmin', String(data.is_admin));
+        }
 
         console.info('Login successful:', data.user_id);
         setMsg('Login successful!');

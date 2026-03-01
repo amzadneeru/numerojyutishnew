@@ -50,6 +50,12 @@ function Signup() {
         if (data.token) localStorage.setItem('authToken', data.token);
         if (data.user_id) localStorage.setItem('userId', data.user_id);
         if (data.email) localStorage.setItem('email', data.email);
+        if (data.user_role || data.role) {
+          localStorage.setItem('userRole', data.user_role || data.role);
+        }
+        if (typeof data.is_admin !== 'undefined') {
+          localStorage.setItem('isAdmin', String(data.is_admin));
+        }
         setMsg('Signup successful! Redirecting...');
         setTimeout(() => navigate('/products'), 1000);
       } else {

@@ -538,6 +538,22 @@ form {
   background: #ffebee;
 }
 
+.charges-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.charges-list-wrap {
+  padding: 0 30px 30px;
+}
+
+.charges-list-wrap h3 {
+  margin: 0 0 12px;
+  color: #2c1b4e;
+}
+
 /* Animations */
 @keyframes slideIn {
   from {
@@ -614,5 +630,9 @@ form {
   .action-buttons {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .charges-form-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Header from '../components/Header';
 import './styles/registration.css';
 
 const DEFAULT_API = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5000' : '');
@@ -176,6 +177,7 @@ function RegistrationWizard() {
 
   return (
     <div className="reg-hero">
+      <Header />
       <div className="reg-card">
         <div className="reg-icon">{step === 1 ? '👤' : step === 2 ? '💜' : step === 3 ? '💼' : '✅'}</div>
         <h2 className="reg-title">{step}. {step === 1 ? 'Personal Details' : step === 2 ? 'Relationship Details' : step === 3 ? 'Professional Details' : 'Confirmation'}</h2>

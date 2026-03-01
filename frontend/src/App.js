@@ -45,6 +45,12 @@ function App() {
         localStorage.setItem('authToken', data.token);
         localStorage.setItem('userId', data.user_id);
         localStorage.setItem('email', data.email);
+        if (data.user_role || data.role) {
+          localStorage.setItem('userRole', data.user_role || data.role);
+        }
+        if (typeof data.is_admin !== 'undefined') {
+          localStorage.setItem('isAdmin', String(data.is_admin));
+        }
 
         console.info('Login successful:', data.user_id);
         setMsg('Login successful');
@@ -178,6 +184,24 @@ function App() {
             Google
           </button>
         </div>
+
+        <p style={{ textAlign: 'center', marginTop: '20px', color: '#666' }}>
+          Don't have an account?{' '}
+          <button
+            type="button"
+            onClick={() => navigate('/signup')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#9C3B9C',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              padding: 0
+            }}
+          >
+            Sign Up
+          </button>
+        </p>
       </div>
     </div>
   );

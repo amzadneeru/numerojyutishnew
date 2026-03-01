@@ -1,0 +1,121 @@
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #F4B555 0%, #9C3B9C 100%);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.admin-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.admin-logo {
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.admin-badge {
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-nav-item {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.admin-nav-item.active {
+  background: #fff;
+  color: #9C3B9C;
+  border-color: #fff;
+}
+
+.admin-user-menu {
+  position: relative;
+}
+
+.admin-user-btn {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.admin-user-dropdown {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  min-width: 220px;
+  background: #fff;
+  color: #333;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-user-email {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.admin-user-dropdown button {
+  border: none;
+  background: #f7f7f7;
+  color: #333;
+  border-radius: 8px;
+  text-align: left;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.admin-user-dropdown button.logout {
+  background: #ffebee;
+  color: #b71c1c;
+}
+
+@media (max-width: 900px) {
+  .admin-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-nav {
+    justify-content: center;
+  }
+
+  .admin-user-menu {
+    align-self: flex-end;
+  }
+}

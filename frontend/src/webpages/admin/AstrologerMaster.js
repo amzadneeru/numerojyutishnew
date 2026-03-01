@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AdminHeader from '../../components/AdminHeader';
 import '../../styles/AstrologerMaster.css';
 
 function AstrologerMaster() {
@@ -40,6 +41,32 @@ function AstrologerMaster() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Astrologer Charges State
+  const [showChargesModal, setShowChargesModal] = useState(false);
+  const [selectedAstrologerForCharges, setSelectedAstrologerForCharges] = useState(null);
+  const [charges, setCharges] = useState([]);
+  const [chargesLoading, setChargesLoading] = useState(false);
+  const [editingChargeId, setEditingChargeId] = useState(null);
+  const [chargeForm, setChargeForm] = useState({
+    consultation_type: 'Call',
+    price_per_minute: '',
+    currency: 'INR',
+    is_active: true
+  });
+
+  // Astrologer Availability State
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [selectedAstrologerForAvailability, setSelectedAstrologerForAvailability] = useState(null);
+  const [availabilities, setAvailabilities] = useState([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [editingAvailabilityId, setEditingAvailabilityId] = useState(null);
+  const [availabilityForm, setAvailabilityForm] = useState({
+    day_of_week: 'Monday',
+    start_time: '09:00',
+    end_time: '17:00',
+    is_available: true
+  });
 
   // Check authentication
   useEffect(() => {
@@ -396,8 +423,272 @@ function AstrologerMaster() {
     }
   };
 
+  const resetChargeForm = () => {
+    setChargeForm({
+      consultation_type: 'Call',
+      price_per_minute: '',
+      currency: 'INR',
+      is_active: true
+    });
+    setEditingChargeId(null);
+  };
+
+  const fetchAstrologerCharges = async (astrologerId) => {
+    try {
+      setChargesLoading(true);
+      const response = await fetch(`${API_URL}/api/astrologers/${astrologerId}/pricing`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCharges(data.data || []);
+      } else {
+        setError(data.message || 'Failed to fetch astrologer charges');
+      }
+    } catch (err) {
+      console.error('Error fetching astrologer charges:', err);
+      setError('Failed to load astrologer charges');
+    } finally {
+      setChargesLoading(false);
+    }
+  };
+
+  const openChargesModal = async (astrologer) => {
+    setSelectedAstrologerForCharges(astrologer);
+    setShowChargesModal(true);
+    resetChargeForm();
+    await fetchAstrologerCharges(astrologer.astrologer_id);
+  };
+
+  const handleChargeSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedAstrologerForCharges) return;
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const payload = {
+        consultation_type: chargeForm.consultation_type,
+        price_per_minute: parseFloat(chargeForm.price_per_minute) || 0,
+        currency: chargeForm.currency,
+        is_active: chargeForm.is_active
+      };
+
+      const url = editingChargeId
+        ? `${API_URL}/api/astrologer-pricing/${editingChargeId}`
+        : `${API_URL}/api/astrologers/${selectedAstrologerForCharges.astrologer_id}/pricing`;
+      const method = editingChargeId ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSuccessMessage(editingChargeId ? 'Charge updated successfully!' : 'Charge added successfully!');
+        resetChargeForm();
+        await fetchAstrologerCharges(selectedAstrologerForCharges.astrologer_id);
+      } else {
+        setError(data.message || 'Failed to save charge');
+      }
+    } catch (err) {
+      console.error('Error saving charge:', err);
+      setError('Failed to save charge');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditCharge = (charge) => {
+    setEditingChargeId(charge.pricing_id);
+    setChargeForm({
+      consultation_type: charge.consultation_type || 'Call',
+      price_per_minute: charge.price_per_minute || 0,
+      currency: charge.currency || 'INR',
+      is_active: charge.is_active !== false
+    });
+  };
+
+  const handleDeleteCharge = async (chargeId) => {
+    if (!window.confirm('Are you sure you want to delete this charge configuration?')) {
+      return;
+    }
+    if (!selectedAstrologerForCharges) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/api/astrologer-pricing/${chargeId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSuccessMessage('Charge deleted successfully!');
+        await fetchAstrologerCharges(selectedAstrologerForCharges.astrologer_id);
+      } else {
+        setError(data.message || 'Failed to delete charge');
+      }
+    } catch (err) {
+      console.error('Error deleting charge:', err);
+      setError('Failed to delete charge');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetAvailabilityForm = () => {
+    setAvailabilityForm({
+      day_of_week: 'Monday',
+      start_time: '09:00',
+      end_time: '17:00',
+      is_available: true
+    });
+    setEditingAvailabilityId(null);
+  };
+
+  const fetchAstrologerAvailability = async (astrologerId) => {
+    try {
+      setAvailabilityLoading(true);
+      const response = await fetch(`${API_URL}/api/astrologers/${astrologerId}/availability`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setAvailabilities(data.data || []);
+      } else {
+        setError(data.message || 'Failed to fetch astrologer availability');
+      }
+    } catch (err) {
+      console.error('Error fetching astrologer availability:', err);
+      setError('Failed to load astrologer availability');
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
+  const openAvailabilityModal = async (astrologer) => {
+    setSelectedAstrologerForAvailability(astrologer);
+    setShowAvailabilityModal(true);
+    resetAvailabilityForm();
+    await fetchAstrologerAvailability(astrologer.astrologer_id);
+  };
+
+  const handleAvailabilitySubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedAstrologerForAvailability) return;
+
+    const startMinutes = Number((availabilityForm.start_time || '00:00').split(':')[0]) * 60
+      + Number((availabilityForm.start_time || '00:00').split(':')[1]);
+    const endMinutes = Number((availabilityForm.end_time || '00:00').split(':')[0]) * 60
+      + Number((availabilityForm.end_time || '00:00').split(':')[1]);
+
+    if (endMinutes <= startMinutes) {
+      setError('End time must be greater than start time');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const endpoint = editingAvailabilityId
+        ? `${API_URL}/api/astrologer-availability/${editingAvailabilityId}`
+        : `${API_URL}/api/astrologers/${selectedAstrologerForAvailability.astrologer_id}/availability`;
+      const response = await fetch(endpoint, {
+        method: editingAvailabilityId ? 'PUT' : 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          day_of_week: availabilityForm.day_of_week,
+          start_time: availabilityForm.start_time,
+          end_time: availabilityForm.end_time,
+          is_available: availabilityForm.is_available
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSuccessMessage(editingAvailabilityId ? 'Availability updated successfully!' : 'Availability saved successfully!');
+        resetAvailabilityForm();
+        await fetchAstrologerAvailability(selectedAstrologerForAvailability.astrologer_id);
+      } else {
+        setError(data.message || 'Failed to save availability');
+      }
+    } catch (err) {
+      console.error('Error saving availability:', err);
+      setError('Failed to save availability');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditAvailability = (availability) => {
+    setEditingAvailabilityId(availability.availability_id);
+    setAvailabilityForm({
+      day_of_week: availability.day_of_week || 'Monday',
+      start_time: availability.start_time || '09:00',
+      end_time: availability.end_time || '17:00',
+      is_available: availability.is_available !== false
+    });
+  };
+
+  const handleDeleteAvailability = async (availabilityId) => {
+    if (!selectedAstrologerForAvailability) return;
+    if (!window.confirm('Are you sure you want to delete this availability?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/api/astrologer-availability/${availabilityId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSuccessMessage('Availability deleted successfully!');
+        if (editingAvailabilityId === availabilityId) {
+          resetAvailabilityForm();
+        }
+        await fetchAstrologerAvailability(selectedAstrologerForAvailability.astrologer_id);
+      } else {
+        setError(data.message || 'Failed to delete availability');
+      }
+    } catch (err) {
+      console.error('Error deleting availability:', err);
+      setError('Failed to delete availability');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="astrologer-master-container">
+      <AdminHeader />
       <header className="astrologer-master-header">
         <h1>🔮 Astrologer Management</h1>
         <button 
@@ -659,6 +950,279 @@ function AstrologerMaster() {
         </div>
       )}
 
+      {/* Astrologer Charges Modal */}
+      {showChargesModal && selectedAstrologerForCharges && (
+        <div className="form-modal">
+          <div className="form-container">
+            <div className="form-header">
+              <h2>💰 Manage Pricing - {selectedAstrologerForCharges.display_name || selectedAstrologerForCharges.full_name}</h2>
+              <button
+                className="close-btn"
+                onClick={() => {
+                  setShowChargesModal(false);
+                  setSelectedAstrologerForCharges(null);
+                  resetChargeForm();
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleChargeSubmit}>
+              <div className="charges-form-grid">
+                <div className="form-group">
+                  <label>Consultation Type *</label>
+                  <select
+                    value={chargeForm.consultation_type}
+                    onChange={(e) => setChargeForm(prev => ({ ...prev, consultation_type: e.target.value }))}
+                    required
+                  >
+                    <option value="Chat">Chat</option>
+                    <option value="Call">Call</option>
+                    <option value="Video">Video</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Price Per Minute *</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={chargeForm.price_per_minute}
+                    onChange={(e) => setChargeForm(prev => ({ ...prev, price_per_minute: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Currency</label>
+                  <select
+                    value={chargeForm.currency}
+                    onChange={(e) => setChargeForm(prev => ({ ...prev, currency: e.target.value }))}
+                  >
+                    <option value="INR">INR</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+
+                <div className="form-group checkbox-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={chargeForm.is_active}
+                      onChange={(e) => setChargeForm(prev => ({ ...prev, is_active: e.target.checked }))}
+                    />
+                    Active
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-actions">
+                {editingChargeId && (
+                  <button type="button" className="btn-cancel" onClick={resetChargeForm}>
+                    Cancel Edit
+                  </button>
+                )}
+                <button type="submit" className="btn-submit" disabled={loading}>
+                  {loading ? 'Saving...' : editingChargeId ? 'Update Charge' : 'Add Charge'}
+                </button>
+              </div>
+            </form>
+
+            <div className="charges-list-wrap">
+              <h3>Defined Pricing</h3>
+              {chargesLoading ? (
+                <div className="loading">Loading pricing...</div>
+              ) : charges.length === 0 ? (
+                <div className="no-data">No pricing defined yet.</div>
+              ) : (
+                <div className="table-container">
+                  <table className="astrologers-table">
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Price / Min</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {charges.map(charge => (
+                        <tr key={charge.pricing_id}>
+                          <td>{charge.consultation_type}</td>
+                          <td>{charge.currency} {charge.price_per_minute}</td>
+                          <td>
+                            <span className={`status-badge ${charge.is_active ? 'active' : 'inactive'}`}>
+                              {charge.is_active ? '✅ Active' : '❌ Inactive'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="action-buttons">
+                              <button type="button" className="btn-edit" onClick={() => handleEditCharge(charge)} title="Edit Charge">
+                                ✏️
+                              </button>
+                              <button type="button" className="btn-delete" onClick={() => handleDeleteCharge(charge.pricing_id)} title="Delete Charge">
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Astrologer Availability Modal */}
+      {showAvailabilityModal && selectedAstrologerForAvailability && (
+        <div className="form-modal">
+          <div className="form-container">
+            <div className="form-header">
+              <h2>🗓️ Manage Availability - {selectedAstrologerForAvailability.display_name || selectedAstrologerForAvailability.full_name}</h2>
+              <button
+                className="close-btn"
+                onClick={() => {
+                  setShowAvailabilityModal(false);
+                  setSelectedAstrologerForAvailability(null);
+                  resetAvailabilityForm();
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAvailabilitySubmit}>
+              <div className="charges-form-grid">
+                <div className="form-group">
+                  <label>Day Of Week *</label>
+                  <select
+                    value={availabilityForm.day_of_week}
+                    onChange={(e) => setAvailabilityForm(prev => ({ ...prev, day_of_week: e.target.value }))}
+                    required
+                  >
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
+                    <option value="Sunday">Sunday</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Start Time *</label>
+                  <input
+                    type="time"
+                    value={availabilityForm.start_time}
+                    onChange={(e) => setAvailabilityForm(prev => ({ ...prev, start_time: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>End Time *</label>
+                  <input
+                    type="time"
+                    value={availabilityForm.end_time}
+                    onChange={(e) => setAvailabilityForm(prev => ({ ...prev, end_time: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="form-group checkbox-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={availabilityForm.is_available}
+                      onChange={(e) => setAvailabilityForm(prev => ({ ...prev, is_available: e.target.checked }))}
+                    />
+                    Active
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-actions">
+                {editingAvailabilityId && (
+                  <button type="button" className="btn-cancel" onClick={resetAvailabilityForm}>
+                    Cancel Edit
+                  </button>
+                )}
+                <button type="button" className="btn-cancel" onClick={resetAvailabilityForm}>
+                  Reset
+                </button>
+                <button type="submit" className="btn-submit" disabled={loading}>
+                  {loading ? 'Saving...' : editingAvailabilityId ? 'Update Availability' : 'Add Availability'}
+                </button>
+              </div>
+            </form>
+
+            <div className="charges-list-wrap">
+              <h3>Weekly Availability</h3>
+              {availabilityLoading ? (
+                <div className="loading">Loading availability...</div>
+              ) : availabilities.length === 0 ? (
+                <div className="no-data">No availability configured yet.</div>
+              ) : (
+                <div className="table-container">
+                  <table className="astrologers-table">
+                    <thead>
+                      <tr>
+                        <th>Day</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {availabilities.map((item) => (
+                        <tr key={item.availability_id}>
+                          <td>{item.day_of_week}</td>
+                          <td>{item.start_time}</td>
+                          <td>{item.end_time}</td>
+                          <td>
+                            <span className={`status-badge ${item.is_available ? 'active' : 'inactive'}`}>
+                              {item.is_available ? '✅ Active' : '❌ Inactive'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="action-buttons">
+                              <button
+                                type="button"
+                                className="btn-edit"
+                                onClick={() => handleEditAvailability(item)}
+                                title="Edit Availability"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-delete"
+                                onClick={() => handleDeleteAvailability(item.availability_id)}
+                                title="Delete Availability"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Astrologers List */}
       <div className="astrologers-list">
         <h2>📋 Astrologers List</h2>
@@ -735,6 +1299,20 @@ function AstrologerMaster() {
                           title="Edit"
                         >
                           ✏️
+                        </button>
+                        <button
+                          className="btn-edit"
+                          onClick={() => openChargesModal(astrologer)}
+                          title="Manage Charges"
+                        >
+                          💰
+                        </button>
+                        <button
+                          className="btn-edit"
+                          onClick={() => openAvailabilityModal(astrologer)}
+                          title="Manage Availability"
+                        >
+                          🗓️
                         </button>
                         <button
                           className="btn-delete"
