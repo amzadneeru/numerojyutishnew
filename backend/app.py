@@ -107,6 +107,115 @@ ALLOWED_ROLES = (
 )
 
 
+def ensure_subscription_tables():
+    """Ensure subscription and payment tables required for checkout flow exist."""
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS numerojyutishdb.user_subscriptions
+            (
+                subscription_id BIGINT NOT NULL DEFAULT nextval('numerojyutishdb.user_subscriptions_subscription_id_seq'::regclass),
+                user_id BIGINT NOT NULL,
+                plan_id BIGINT NOT NULL,
+                billing_cycle_id BIGINT NOT NULL,
+                pricing_id BIGINT NOT NULL,
+                start_date DATE NOT NULL,
+                end_date DATE NOT NULL,
+                status VARCHAR(30) DEFAULT 'ACTIVE',
+                auto_renew BOOLEAN DEFAULT TRUE,
+                CONSTRAINT user_subscriptions_pkey PRIMARY KEY (subscription_id),
+                CONSTRAINT fk_user_cycle FOREIGN KEY (billing_cycle_id)
+                    REFERENCES numerojyutishdb.billing_cycles (billing_cycle_id)
+                    ON UPDATE NO ACTION
+                    ON DELETE NO ACTION,
+                CONSTRAINT fk_user_plan FOREIGN KEY (plan_id)
+                    REFERENCES numerojyutishdb.subscription_plans (plan_id)
+                    ON UPDATE NO ACTION
+                    ON DELETE NO ACTION,
+                CONSTRAINT fk_user_pricing FOREIGN KEY (pricing_id)
+                    REFERENCES numerojyutishdb.subscription_pricing (pricing_id)
+                    ON UPDATE NO ACTION
+                    ON DELETE NO ACTION
+            )
+            """
+        )
+
+        # Compatibility migrations for older deployments
+        cur.execute("ALTER TABLE numerojyutishdb.user_subscriptions ADD COLUMN IF NOT EXISTS pricing_id BIGINT")
+        cur.execute("ALTER TABLE numerojyutishdb.user_subscriptions ADD COLUMN IF NOT EXISTS auto_renew BOOLEAN DEFAULT TRUE")
+        cur.execute("ALTER TABLE numerojyutishdb.user_subscriptions ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'ACTIVE'")
+
+        # One-time data backfill for legacy rows created before pricing_id existed.
+        # Picks active pricing for matching plan + billing cycle, preferring country_code IN.
+        cur.execute(
+            """
+            WITH candidate_pricing AS (
+                SELECT
+                    us.subscription_id,
+                    spr.pricing_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY us.subscription_id
+                        ORDER BY CASE WHEN spr.country_code = 'IN' THEN 0 ELSE 1 END,
+                                 spr.pricing_id DESC
+                    ) AS rn
+                FROM numerojyutishdb.user_subscriptions us
+                JOIN numerojyutishdb.subscription_pricing spr
+                  ON spr.plan_id = us.plan_id
+                 AND spr.billing_cycle_id = us.billing_cycle_id
+                 AND spr.is_active = true
+                WHERE us.pricing_id IS NULL
+            )
+            UPDATE numerojyutishdb.user_subscriptions us
+               SET pricing_id = cp.pricing_id
+              FROM candidate_pricing cp
+             WHERE us.subscription_id = cp.subscription_id
+               AND cp.rn = 1
+               AND us.pricing_id IS NULL
+            """
+        )
+
+        # Normalize legacy mixed-case status values.
+        cur.execute(
+            """
+            UPDATE numerojyutishdb.user_subscriptions
+               SET status = UPPER(status)
+             WHERE status IS NOT NULL
+               AND status <> UPPER(status)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS numerojyutishdb.subscription_payments
+            (
+                subscription_payment_id BIGSERIAL PRIMARY KEY,
+                subscription_id BIGINT NOT NULL,
+                order_id BIGINT,
+                payment_id BIGINT,
+                amount NUMERIC(12,2),
+                status VARCHAR(30),
+                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_sub_payment FOREIGN KEY (subscription_id)
+                    REFERENCES numerojyutishdb.user_subscriptions (subscription_id)
+                    ON UPDATE NO ACTION
+                    ON DELETE NO ACTION
+            )
+            """
+        )
+
+        conn.commit()
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
 
 
 
@@ -149,9 +258,9 @@ def login():
             conn.close()
             return jsonify(success=False, message='Invalid credentials'), 401
 
-        # generate token, store in DB
+        # generate token, store in auth source table
         token = secrets.token_urlsafe(32)
-        cur.execute("UPDATE numerojyutishdb.users SET authtoken = %s, updated_at = CURRENT_TIMESTAMP WHERE user_id = %s", (token, user_id))
+        cur.execute("UPDATE numerojyutishdb.security SET authtoken = %s WHERE user_id = %s", (token, user_id))
         conn.commit()
         cur.close()
         conn.close()
@@ -1294,6 +1403,373 @@ def get_plans_with_pricing():
         except Exception:
             pass
         return jsonify(success=False, message=f'Error fetching plans with pricing: {str(e)}'), 500
+
+
+@app.route('/api/subscriptions/checkout', methods=['POST'])
+def checkout_subscription():
+    """
+    Complete subscription checkout and save payment record.
+    Expected JSON:
+    {
+      "user_id": 123,
+      "plan_id": 1,
+      "billing_cycle_id": 1,
+      "country_code": "IN",
+      "order_id": 10001,
+      "payment_id": 20001,
+      "status": "Paid"
+    }
+    """
+    conn = None
+    cur = None
+    try:
+        ensure_subscription_tables()
+
+        data = request.get_json() or {}
+        user_id = data.get('user_id')
+        plan_id = data.get('plan_id')
+        billing_cycle_id = data.get('billing_cycle_id')
+        country_code = (data.get('country_code') or 'IN').upper()
+        order_id = data.get('order_id')
+        payment_id = data.get('payment_id')
+        payment_status = (data.get('status') or 'Paid').strip().title()
+        is_upgrade = bool(data.get('is_upgrade', False))
+
+        if not user_id or not plan_id or not billing_cycle_id:
+            return jsonify(success=False, message='user_id, plan_id and billing_cycle_id are required'), 400
+
+        if payment_status not in {'Pending', 'Paid', 'Failed'}:
+            return jsonify(success=False, message='status must be one of Pending, Paid, Failed'), 400
+
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+        if not token:
+            return jsonify(success=False, message='Authorization token required'), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute(
+            """
+            SELECT user_id
+            FROM numerojyutishdb.security
+            WHERE authtoken = %s AND user_id = %s
+            UNION
+            SELECT user_id
+            FROM numerojyutishdb.users
+            WHERE authtoken = %s AND user_id = %s
+            """,
+            (token, user_id, token, user_id)
+        )
+        if not cur.fetchone():
+            return jsonify(success=False, message='Invalid token for user'), 401
+
+        cur.execute(
+            """
+            SELECT plan_id
+            FROM numerojyutishdb.subscription_plans
+            WHERE plan_id = %s AND is_active = true
+            """,
+            (plan_id,)
+        )
+        if not cur.fetchone():
+            return jsonify(success=False, message='Subscription plan not found or inactive'), 404
+
+        cur.execute(
+            """
+                        SELECT pricing_id, final_price
+            FROM numerojyutishdb.subscription_pricing
+            WHERE plan_id = %s
+              AND billing_cycle_id = %s
+              AND country_code = %s
+              AND is_active = true
+            LIMIT 1
+            """,
+            (plan_id, billing_cycle_id, country_code)
+        )
+        pricing_row = cur.fetchone()
+        if not pricing_row:
+            return jsonify(success=False, message='No active pricing found for selected plan and cycle'), 404
+
+        amount = float(pricing_row['final_price'] or 0)
+        start_date = datetime.utcnow().date()
+        duration_days = 365 if int(billing_cycle_id) == 2 else 30
+        end_date = start_date + timedelta(days=duration_days)
+        subscription_status = 'ACTIVE' if payment_status == 'Paid' else 'PENDING'
+
+        cur.execute(
+            """
+            SELECT subscription_id, plan_id, billing_cycle_id, start_date, end_date, status
+            FROM numerojyutishdb.user_subscriptions
+            WHERE user_id = %s
+              AND status = 'ACTIVE'
+              AND end_date >= CURRENT_DATE
+            ORDER BY end_date DESC, subscription_id DESC
+            LIMIT 1
+            """,
+            (user_id,)
+        )
+        active_subscription = cur.fetchone()
+
+        if active_subscription and not is_upgrade:
+            cur.execute(
+                """
+                SELECT
+                    sp.plan_id,
+                    sp.plan_name,
+                    spr.billing_cycle_id,
+                    spr.final_price
+                FROM numerojyutishdb.subscription_plans sp
+                JOIN numerojyutishdb.subscription_pricing spr
+                  ON spr.plan_id = sp.plan_id
+                 AND spr.country_code = %s
+                 AND spr.is_active = true
+                WHERE sp.is_active = true
+                  AND NOT (sp.plan_id = %s AND spr.billing_cycle_id = %s)
+                ORDER BY sp.plan_id, spr.billing_cycle_id
+                """,
+                (
+                    country_code,
+                    active_subscription['plan_id'],
+                    active_subscription['billing_cycle_id']
+                )
+            )
+            upgrade_rows = cur.fetchall()
+            return jsonify(
+                success=False,
+                upgrade_required=True,
+                message='Active subscription already exists. Use upgrade option to change plan.',
+                data={
+                    'current_subscription': {
+                        'subscription_id': active_subscription['subscription_id'],
+                        'plan_id': active_subscription['plan_id'],
+                        'billing_cycle_id': active_subscription['billing_cycle_id'],
+                        'status': active_subscription['status'],
+                        'start_date': active_subscription['start_date'].isoformat() if active_subscription['start_date'] else None,
+                        'end_date': active_subscription['end_date'].isoformat() if active_subscription['end_date'] else None
+                    },
+                    'upgrade_options': [
+                        {
+                            'plan_id': row['plan_id'],
+                            'plan_name': row['plan_name'],
+                            'billing_cycle_id': row['billing_cycle_id'],
+                            'final_price': float(row['final_price'] or 0)
+                        }
+                        for row in upgrade_rows
+                    ]
+                }
+            ), 409
+
+        if active_subscription and is_upgrade:
+            if payment_status != 'Paid':
+                return jsonify(success=False, message='Upgrade requires successful payment status Paid'), 400
+
+            if int(active_subscription['plan_id']) == int(plan_id) and int(active_subscription['billing_cycle_id']) == int(billing_cycle_id):
+                return jsonify(success=False, message='You already have this active subscription plan'), 400
+
+            cur.execute(
+                """
+                UPDATE numerojyutishdb.user_subscriptions
+                   SET plan_id = %s,
+                       billing_cycle_id = %s,
+                       pricing_id = %s,
+                       start_date = %s,
+                       end_date = %s,
+                       status = %s,
+                       auto_renew = %s
+                 WHERE subscription_id = %s
+                RETURNING subscription_id, status, start_date, end_date
+                """,
+                (
+                    plan_id,
+                    billing_cycle_id,
+                    pricing_row['pricing_id'],
+                    start_date,
+                    end_date,
+                    subscription_status,
+                    True,
+                    active_subscription['subscription_id']
+                )
+            )
+            subscription_row = cur.fetchone()
+        else:
+            cur.execute(
+                """
+                INSERT INTO numerojyutishdb.user_subscriptions
+                (user_id, plan_id, billing_cycle_id, pricing_id, start_date, end_date, status, auto_renew)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING subscription_id, status, start_date, end_date
+                """,
+                (
+                    user_id,
+                    plan_id,
+                    billing_cycle_id,
+                    pricing_row['pricing_id'],
+                    start_date,
+                    end_date,
+                    subscription_status,
+                    True
+                )
+            )
+            subscription_row = cur.fetchone()
+
+        cur.execute(
+            """
+            INSERT INTO numerojyutishdb.subscription_payments
+            (subscription_id, order_id, payment_id, amount, status)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING subscription_payment_id, subscription_id, amount, status, created_at
+            """,
+            (
+                subscription_row['subscription_id'],
+                order_id,
+                payment_id,
+                amount,
+                payment_status
+            )
+        )
+        payment_row = cur.fetchone()
+
+        conn.commit()
+        return jsonify(
+            success=True,
+            message='Subscription process completed successfully',
+            data={
+                'subscription_id': subscription_row['subscription_id'],
+                'subscription_status': subscription_row['status'],
+                'is_upgrade': bool(active_subscription and is_upgrade),
+                'start_date': subscription_row['start_date'].isoformat() if subscription_row['start_date'] else None,
+                'end_date': subscription_row['end_date'].isoformat() if subscription_row['end_date'] else None,
+                'payment': {
+                    'subscription_payment_id': payment_row['subscription_payment_id'],
+                    'amount': float(payment_row['amount'] or 0),
+                    'status': payment_row['status'],
+                    'created_at': payment_row['created_at'].isoformat() if payment_row['created_at'] else None
+                }
+            }
+        ), 201
+    except Exception as e:
+        logging.error(f"Error in subscription checkout: {e}")
+        if conn:
+            conn.rollback()
+        return jsonify(success=False, message=f'Error completing subscription process: {str(e)}'), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.route('/api/subscriptions/my', methods=['GET'])
+def list_my_subscriptions():
+    """Return subscriptions for the authenticated user with latest payment details."""
+    conn = None
+    cur = None
+    try:
+        ensure_subscription_tables()
+
+        user_id = request.args.get('user_id', type=int)
+        if not user_id:
+            return jsonify(success=False, message='user_id is required'), 400
+
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+        if not token:
+            return jsonify(success=False, message='Authorization token required'), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute(
+            """
+            SELECT user_id
+            FROM numerojyutishdb.security
+            WHERE authtoken = %s AND user_id = %s
+            UNION
+            SELECT user_id
+            FROM numerojyutishdb.users
+            WHERE authtoken = %s AND user_id = %s
+            """,
+            (token, user_id, token, user_id)
+        )
+        if not cur.fetchone():
+            return jsonify(success=False, message='Invalid token for user'), 401
+
+        cur.execute(
+            """
+            SELECT
+                us.subscription_id,
+                us.user_id,
+                us.plan_id,
+                us.billing_cycle_id,
+                us.pricing_id,
+                us.status AS subscription_status,
+                us.start_date,
+                us.end_date,
+                sp.plan_name,
+                sp.plan_code,
+                latest.subscription_payment_id,
+                latest.order_id,
+                latest.payment_id,
+                latest.amount,
+                latest.status AS payment_status,
+                latest.created_at AS payment_created_at
+            FROM numerojyutishdb.user_subscriptions us
+            LEFT JOIN numerojyutishdb.subscription_plans sp
+                ON sp.plan_id = us.plan_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    p.subscription_payment_id,
+                    p.order_id,
+                    p.payment_id,
+                    p.amount,
+                    p.status,
+                    p.created_at
+                FROM numerojyutishdb.subscription_payments p
+                WHERE p.subscription_id = us.subscription_id
+                ORDER BY p.created_at DESC, p.subscription_payment_id DESC
+                LIMIT 1
+            ) latest ON true
+            WHERE us.user_id = %s
+            ORDER BY us.subscription_id DESC
+            """,
+            (user_id,)
+        )
+        rows = cur.fetchall()
+
+        subscriptions = [
+            {
+                'subscription_id': row['subscription_id'],
+                'user_id': row['user_id'],
+                'plan_id': row['plan_id'],
+                'plan_name': row['plan_name'],
+                'plan_code': row['plan_code'],
+                'billing_cycle_id': row['billing_cycle_id'],
+                'pricing_id': row['pricing_id'],
+                'subscription_status': row['subscription_status'],
+                'start_date': row['start_date'].isoformat() if row['start_date'] else None,
+                'end_date': row['end_date'].isoformat() if row['end_date'] else None,
+                'payment': {
+                    'subscription_payment_id': row['subscription_payment_id'],
+                    'order_id': row['order_id'],
+                    'payment_id': row['payment_id'],
+                    'amount': float(row['amount']) if row['amount'] is not None else 0,
+                    'status': row['payment_status'],
+                    'created_at': row['payment_created_at'].isoformat() if row['payment_created_at'] else None
+                }
+            }
+            for row in rows
+        ]
+
+        return jsonify(success=True, data=subscriptions), 200
+    except Exception as e:
+        logging.error(f"Error fetching user subscriptions: {e}")
+        return jsonify(success=False, message=f'Error fetching subscriptions: {str(e)}'), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 # Relationship status lookup endpoints

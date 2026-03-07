@@ -1,0 +1,141 @@
+.subscription-payment-page {
+  min-height: 100vh;
+  background: #f7f8fb;
+}
+
+.subscription-payment-main {
+  display: flex;
+  justify-content: center;
+  padding: 24px 16px 40px;
+}
+
+.subscription-payment-card {
+  width: 100%;
+  max-width: 680px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+}
+
+.subscription-payment-card h1 {
+  margin: 0 0 16px;
+  font-size: 28px;
+  color: #2d2d2d;
+}
+
+.payment-summary {
+  border: 1px solid #e7e8ef;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: #fcfcff;
+}
+
+.payment-summary h3 {
+  margin: 0 0 8px;
+}
+
+.payment-summary p,
+.current-subscription-box p {
+  margin: 6px 0;
+}
+
+.current-subscription-box {
+  border: 1px solid #e8ddf7;
+  background: #f8f3ff;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.payment-form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.payment-form label {
+  font-weight: 600;
+  color: #444;
+}
+
+.payment-form select,
+.payment-form input {
+  border: 1px solid #d9d9e3;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.payment-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.primary-btn,
+.secondary-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-btn {
+  background: #6b3fa0;
+  color: #fff;
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondary-btn {
+  background: #ececf3;
+  color: #333;
+}
+
+.payment-error {
+  color: #c83737;
+  font-weight: 500;
+  margin: 12px 0;
+}
+
+.payment-warning {
+  color: #9f4f00;
+  font-weight: 500;
+}
+
+.payment-info {
+  color: #245bba;
+  font-weight: 500;
+  margin: 10px 0;
+}
+
+.upgrade-options-box {
+  border-top: 1px solid #ececf3;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.upgrade-options-box h4 {
+  margin: 0 0 8px;
+}
+
+.upgrade-options-list {
+  display: grid;
+  gap: 8px;
+}
+
+.upgrade-options-list button {
+  border: 1px solid #d9d9e3;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}

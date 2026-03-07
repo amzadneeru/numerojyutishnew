@@ -20,6 +20,8 @@ import Shopping from './webpages/Shopping';
 import AstrologerSlotBooking from './webpages/AstrologerSlotBooking';
 import AstrologerBookingCharge from './webpages/AstrologerBookingCharge';
 import MyConsultationBookings from './webpages/MyConsultationBookings';
+import MySubscriptions from './webpages/MySubscriptions';
+import SubscriptionPayment from './webpages/SubscriptionPayment';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 function isAdminUser() {
@@ -56,6 +58,8 @@ root.render(
         <Route path="/consult-astrologers/:astroId/book" element={<AstrologerSlotBooking />} />
         <Route path="/consult-bookings/:bookingId/charge" element={<AstrologerBookingCharge />} />
         <Route path="/my-consultation-bookings" element={<MyConsultationBookings />} />
+        <Route path="/my-subscriptions" element={<MySubscriptions />} />
+        <Route path="/subscription-payment" element={<SubscriptionPayment />} />
         <Route path="/admin/astrologermaster" element={<AdminRoute><AstrologerMaster /></AdminRoute>} />
       </Routes>
     </BrowserRouter>

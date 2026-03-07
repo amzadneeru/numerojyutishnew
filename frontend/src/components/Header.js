@@ -93,6 +93,11 @@ function Header() {
                       My Consultation Bookings
                     </button>
                   )}
+                  {userId && (
+                    <button onClick={() => handleNavigation('/my-subscriptions')}>
+                      My Subscriptions
+                    </button>
+                  )}
                   <button onClick={() => handleNavigation('/subscription-plan')}>
                     Subscription Plans
                   </button>
@@ -194,6 +199,13 @@ function Header() {
                       onClick={() => handleNavigation('/my-consultation-bookings')}
                     >
                       📅 My Consultation Bookings
+                    </button>
+
+                    <button
+                      className="dropdown-item"
+                      onClick={() => handleNavigation('/my-subscriptions')}
+                    >
+                      💎 My Subscriptions
                     </button>
 
                     <button

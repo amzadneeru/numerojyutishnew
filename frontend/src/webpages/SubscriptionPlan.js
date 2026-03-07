@@ -101,14 +101,33 @@ function SubscriptionPlan() {
     setExpandedPlan(null);
   };
 
-  const handleSubscribe = () => {
-    // Store selected plan info
-    localStorage.setItem('selectedPlan', JSON.stringify({
-      planName: currentPlan.name,
-      billingPeriod: billingPeriod,
-      price: price
-    }));
-    navigate('/subscription-plan');
+  const handleSubscribe = async () => {
+    if (!currentPlan) {
+      setError('No plan selected');
+      return;
+    }
+
+    const userId = localStorage.getItem('userId');
+    const authToken = localStorage.getItem('authToken');
+    if (!userId || !authToken) {
+      setError('Please login to continue with subscription');
+      navigate('/');
+      return;
+    }
+
+    setError('');
+    navigate('/subscription-payment', {
+      state: {
+        selectedPlan: {
+          plan_id: Number(currentPlan.id),
+          plan_name: currentPlan.name,
+          billing_cycle_id: billingPeriod === 'yearly' ? 2 : 1,
+          billing_period: billingPeriod,
+          price: Number(price || 0),
+          country_code: 'IN'
+        }
+      }
+    });
   };
 
 
@@ -299,7 +318,7 @@ function SubscriptionPlan() {
           {/* Action Buttons */}
           <div className="action-section">
             <button className="subscribe-btn" onClick={handleSubscribe}>
-              Subscribe
+              Continue to Payment
             </button>
             <button className="skip-btn" onClick={handleSkip}>
               Skip for now

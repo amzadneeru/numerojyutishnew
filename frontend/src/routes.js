@@ -18,6 +18,8 @@ import Shopping from './webpages/Shopping';
 import ConsultAstrologers from './webpages/ConsultAstrologers';
 import AstrologerSlotBooking from './webpages/AstrologerSlotBooking';
 import AstrologerBookingCharge from './webpages/AstrologerBookingCharge';
+import MySubscriptions from './webpages/MySubscriptions';
+import SubscriptionPayment from './webpages/SubscriptionPayment';
 import Layout from './layouts/Layout';
 
 function isAdminUser() {
@@ -106,5 +108,13 @@ export const router = createBrowserRouter([
   {
     path: '/consult-bookings/:bookingId/charge',
     element: <Layout><AstrologerBookingCharge /></Layout>,
+  },
+  {
+    path: '/my-subscriptions',
+    element: <Layout><MySubscriptions /></Layout>,
+  },
+  {
+    path: '/subscription-payment',
+    element: <Layout><SubscriptionPayment /></Layout>,
   },
 ]);

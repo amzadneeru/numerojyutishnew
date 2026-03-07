@@ -1,0 +1,138 @@
+.my-subscriptions-page {
+  min-height: 100vh;
+  background: #f7f7fb;
+}
+
+.my-subscriptions-main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+.my-subscriptions-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.my-subscriptions-head h1 {
+  margin: 0;
+  color: #2c1b4e;
+}
+
+.my-subscriptions-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(to right, #F4B555, #9C3B9C);
+}
+
+.my-subscriptions-loading,
+.my-subscriptions-error,
+.my-subscriptions-empty {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.my-subscriptions-error {
+  color: #b00020;
+}
+
+.my-subscriptions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.my-sub-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.my-sub-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.my-sub-card-head h3 {
+  margin: 0;
+  color: #2c1b4e;
+  font-size: 1.05rem;
+}
+
+.my-sub-card p {
+  margin: 6px 0;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.my-sub-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #eceff1;
+  color: #455a64;
+}
+
+.my-sub-badge.active {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.my-sub-badge.pending {
+  background: #fff8e1;
+  color: #f57f17;
+}
+
+.my-sub-badge.failed,
+.my-sub-badge.cancelled {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.my-sub-payment {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.my-sub-payment h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: #2c1b4e;
+}
+
+.my-sub-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.my-sub-upgrade-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(to right, #5f3ac4, #7f2d92);
+}
+
+.my-sub-upgrade-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: #9ea3b0;
+}
