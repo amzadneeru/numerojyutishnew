@@ -101,6 +101,9 @@ function Header() {
                   <button onClick={() => handleNavigation('/subscription-plan')}>
                     Subscription Plans
                   </button>
+                  <button onClick={() => handleNavigation('/enquiry')}>
+                    Enquiry Form
+                  </button>
                   <button onClick={() => handleNavigation('/shopping')}>
                     Online Store
                   </button>
@@ -145,6 +148,13 @@ function Header() {
               onClick={() => handleNavigation('/subscription-plan')}
             >
               💳 Plans
+            </button>
+
+            <button
+              className="nav-item"
+              onClick={() => handleNavigation('/enquiry')}
+            >
+              📝 Enquiry
             </button>
 
             {/* Dashboard - Only show if logged in */}
@@ -222,6 +232,13 @@ function Header() {
                       onClick={() => handleNavigation('/subscription-plan')}
                     >
                       💳 Manage Subscription
+                    </button>
+
+                    <button
+                      className="dropdown-item"
+                      onClick={() => handleNavigation('/enquiry')}
+                    >
+                      📝 Enquiry Form
                     </button>
 
                     <div className="dropdown-divider"></div>

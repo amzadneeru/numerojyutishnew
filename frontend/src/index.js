@@ -16,12 +16,14 @@ import ConsultAstrologers from './webpages/ConsultAstrologers';
 import AstrologerMaster from './webpages/admin/AstrologerMaster';
 import AdminDashboard from './webpages/admin/AdminDashboard';
 import AstrologerBookingChargesAdmin from './webpages/admin/AstrologerBookingChargesAdmin';
+import EnquiryAdmin from './webpages/admin/EnquiryAdmin';
 import Shopping from './webpages/Shopping';
 import AstrologerSlotBooking from './webpages/AstrologerSlotBooking';
 import AstrologerBookingCharge from './webpages/AstrologerBookingCharge';
 import MyConsultationBookings from './webpages/MyConsultationBookings';
 import MySubscriptions from './webpages/MySubscriptions';
 import SubscriptionPayment from './webpages/SubscriptionPayment';
+import Enquiry from './webpages/Enquiry';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 function isAdminUser() {
@@ -49,6 +51,7 @@ root.render(
         <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard/></AdminRoute>} />
         <Route path="/admin/productmaster" element={<AdminRoute><ProductMaster/></AdminRoute>} />
         <Route path="/admin/booking-charges" element={<AdminRoute><AstrologerBookingChargesAdmin/></AdminRoute>} />
+        <Route path="/admin/enquiries" element={<AdminRoute><EnquiryAdmin/></AdminRoute>} />
         <Route path="/subscription-plan" element={<SubscriptionPlan />} />
         <Route path="/auth/callback/:provider" element={<SocialCallback />} />
         <Route path="/social-callback" element={<SocialCallback />} />
@@ -60,6 +63,7 @@ root.render(
         <Route path="/my-consultation-bookings" element={<MyConsultationBookings />} />
         <Route path="/my-subscriptions" element={<MySubscriptions />} />
         <Route path="/subscription-payment" element={<SubscriptionPayment />} />
+        <Route path="/enquiry" element={<Enquiry />} />
         <Route path="/admin/astrologermaster" element={<AdminRoute><AstrologerMaster /></AdminRoute>} />
       </Routes>
     </BrowserRouter>

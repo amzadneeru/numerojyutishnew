@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from pathlib import Path
 from flask import Flask, request, jsonify, redirect, send_from_directory
 from flask_cors import CORS
@@ -13,7 +14,7 @@ from werkzeug.security import generate_password_hash
 from authlib.integrations.flask_client import OAuth
 import requests
 from twilio.rest import Client as TwilioClient
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date, time
 import cloudinary
 import cloudinary.uploader
 
@@ -216,6 +217,55 @@ def ensure_subscription_tables():
             conn.close()
 
 
+def ensure_enquiry_table():
+    """Ensure enquiry table exists for enquiry capture flow."""
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS numerojyutishdb.enquiry
+            (
+                enquiry_id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                gender VARCHAR(10) CHECK (gender IN ('Male','Female','Other')),
+                phone_no VARCHAR(15) NOT NULL,
+                email VARCHAR(150),
+                date_of_birth DATE,
+                birth_time TIME,
+                birth_place VARCHAR(150),
+                enquiry_type VARCHAR(100),
+                description TEXT,
+                enquiry_status VARCHAR(20)
+                    CHECK (enquiry_status IN ('Pending','In Progress','Completed','Cancelled'))
+                    DEFAULT 'Pending',
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+def serialize_enquiry_row(row):
+    """Convert non-JSON-native values in enquiry row to serializable strings."""
+    if not row:
+        return row
+
+    serialized = dict(row)
+    for key, value in serialized.items():
+        if isinstance(value, (datetime, date, time)):
+            serialized[key] = value.isoformat()
+    return serialized
+
+
 
 
 
@@ -232,6 +282,249 @@ def uploaded_file(filename):
 @app.route('/', methods=['GET'])
 def health():
     return jsonify(status='ok')
+
+
+@app.route('/api/enquiries', methods=['POST'])
+def create_enquiry():
+    """Capture a new enquiry."""
+    conn = None
+    cur = None
+    try:
+        ensure_enquiry_table()
+
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip()
+        gender = data.get('gender')
+        phone_no = (data.get('phone_no') or '').strip()
+        email = (data.get('email') or '').strip() or None
+        date_of_birth = data.get('date_of_birth')
+        birth_time = data.get('birth_time')
+        birth_place = data.get('birth_place')
+        enquiry_type = data.get('enquiry_type')
+        description = data.get('description')
+        enquiry_status = data.get('enquiry_status') or 'Pending'
+        comment = data.get('comment')
+
+        if not name or not phone_no:
+            return jsonify(success=False, message='name and phone_no are required'), 400
+
+        if not re.fullmatch(r'^[0-9]{10,15}$', phone_no):
+            return jsonify(success=False, message='phone_no must contain only digits and be 10 to 15 characters long'), 400
+
+        if email and not re.fullmatch(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            return jsonify(success=False, message='Invalid email format'), 400
+
+        if gender and gender not in {'Male', 'Female', 'Other'}:
+            return jsonify(success=False, message="gender must be one of Male, Female, Other"), 400
+
+        if enquiry_status not in {'Pending', 'In Progress', 'Completed', 'Cancelled'}:
+            return jsonify(success=False, message='Invalid enquiry_status'), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """
+            INSERT INTO numerojyutishdb.enquiry
+            (name, gender, phone_no, email, date_of_birth, birth_time, birth_place,
+             enquiry_type, description, enquiry_status, comment)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING enquiry_id, name, gender, phone_no, email, date_of_birth,
+                      birth_time, birth_place, enquiry_type, description,
+                      enquiry_status, comment, created_at
+            """,
+            (
+                name,
+                gender,
+                phone_no,
+                email,
+                date_of_birth,
+                birth_time,
+                birth_place,
+                enquiry_type,
+                description,
+                enquiry_status,
+                comment
+            )
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return jsonify(success=True, message='Enquiry captured successfully', data=serialize_enquiry_row(row)), 201
+    except Exception as e:
+        logging.error(f"Error creating enquiry: {e}")
+        if conn:
+            conn.rollback()
+        return jsonify(success=False, message=f'Error creating enquiry: {str(e)}'), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.route('/api/enquiries', methods=['GET'])
+def list_enquiries():
+    """List enquiries with optional status filter."""
+    conn = None
+    cur = None
+    try:
+        ensure_enquiry_table()
+
+        status_filter = request.args.get('enquiry_status')
+        phone_filter = request.args.get('phone_no')
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        query = """
+            SELECT enquiry_id, name, gender, phone_no, email, date_of_birth,
+                   birth_time, birth_place, enquiry_type, description,
+                   enquiry_status, comment, created_at
+            FROM numerojyutishdb.enquiry
+        """
+        params = []
+        filters = []
+
+        if status_filter:
+            filters.append("enquiry_status = %s")
+            params.append(status_filter)
+        if phone_filter:
+            filters.append("phone_no = %s")
+            params.append(phone_filter)
+
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+
+        query += " ORDER BY enquiry_id DESC"
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        return jsonify(success=True, data=[serialize_enquiry_row(row) for row in rows]), 200
+    except Exception as e:
+        logging.error(f"Error listing enquiries: {e}")
+        return jsonify(success=False, message=f'Error listing enquiries: {str(e)}'), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.route('/api/enquiries/<int:enquiry_id>', methods=['GET'])
+def get_enquiry(enquiry_id):
+    """Get enquiry details by enquiry_id."""
+    conn = None
+    cur = None
+    try:
+        ensure_enquiry_table()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """
+            SELECT enquiry_id, name, gender, phone_no, email, date_of_birth,
+                   birth_time, birth_place, enquiry_type, description,
+                   enquiry_status, comment, created_at
+            FROM numerojyutishdb.enquiry
+            WHERE enquiry_id = %s
+            """,
+            (enquiry_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify(success=False, message='Enquiry not found'), 404
+        return jsonify(success=True, data=serialize_enquiry_row(row)), 200
+    except Exception as e:
+        logging.error(f"Error fetching enquiry {enquiry_id}: {e}")
+        return jsonify(success=False, message=f'Error fetching enquiry: {str(e)}'), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.route('/api/enquiries/<int:enquiry_id>', methods=['PUT'])
+def update_enquiry(enquiry_id):
+    """Update enquiry status/comment and basic enquiry fields."""
+    conn = None
+    cur = None
+    try:
+        ensure_enquiry_table()
+
+        data = request.get_json() or {}
+
+        allowed_fields = {
+            'name': 'name',
+            'gender': 'gender',
+            'phone_no': 'phone_no',
+            'email': 'email',
+            'date_of_birth': 'date_of_birth',
+            'birth_time': 'birth_time',
+            'birth_place': 'birth_place',
+            'enquiry_type': 'enquiry_type',
+            'description': 'description',
+            'enquiry_status': 'enquiry_status',
+            'comment': 'comment'
+        }
+
+        if 'gender' in data and data.get('gender') not in {'Male', 'Female', 'Other'}:
+            return jsonify(success=False, message="gender must be one of Male, Female, Other"), 400
+
+        if 'enquiry_status' in data and data.get('enquiry_status') not in {'Pending', 'In Progress', 'Completed', 'Cancelled'}:
+            return jsonify(success=False, message='Invalid enquiry_status'), 400
+
+        if 'phone_no' in data and data.get('phone_no') is not None:
+            phone_no = str(data.get('phone_no')).strip()
+            if not re.fullmatch(r'^[0-9]{10,15}$', phone_no):
+                return jsonify(success=False, message='phone_no must contain only digits and be 10 to 15 characters long'), 400
+            data['phone_no'] = phone_no
+
+        if 'email' in data and data.get('email'):
+            email = str(data.get('email')).strip()
+            if not re.fullmatch(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+                return jsonify(success=False, message='Invalid email format'), 400
+            data['email'] = email
+
+        update_fields = []
+        params = []
+        for payload_key, db_column in allowed_fields.items():
+            if payload_key in data:
+                update_fields.append(f"{db_column} = %s")
+                params.append(data.get(payload_key))
+
+        if not update_fields:
+            return jsonify(success=False, message='No fields to update'), 400
+
+        params.append(enquiry_id)
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            f"""
+            UPDATE numerojyutishdb.enquiry
+            SET {', '.join(update_fields)}
+            WHERE enquiry_id = %s
+            RETURNING enquiry_id, name, gender, phone_no, email, date_of_birth,
+                      birth_time, birth_place, enquiry_type, description,
+                      enquiry_status, comment, created_at
+            """,
+            params
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify(success=False, message='Enquiry not found'), 404
+
+        conn.commit()
+        return jsonify(success=True, message='Enquiry updated successfully', data=serialize_enquiry_row(row)), 200
+    except Exception as e:
+        logging.error(f"Error updating enquiry {enquiry_id}: {e}")
+        if conn:
+            conn.rollback()
+        return jsonify(success=False, message=f'Error updating enquiry: {str(e)}'), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/login', methods=['POST'])
 def login():

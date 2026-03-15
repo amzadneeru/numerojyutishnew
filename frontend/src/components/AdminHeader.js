@@ -23,7 +23,8 @@ function AdminHeader() {
     { label: 'Admin Dashboard', path: '/admin/dashboard' },
     { label: 'Product Master', path: '/admin/productmaster' },
     { label: 'Astrologer Master', path: '/admin/astrologermaster' },
-    { label: 'Booking Charges', path: '/admin/booking-charges' }
+    { label: 'Booking Charges', path: '/admin/booking-charges' },
+    { label: 'Enquiries', path: '/admin/enquiries' }
   ];
 
   return (

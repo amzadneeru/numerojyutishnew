@@ -24,6 +24,12 @@ function AdminDashboard() {
       icon: '📅',
       label: 'Booking Charges',
       desc: 'Manage astrologer consultation charges, payment and booking status'
+    },
+    {
+      path: '/admin/enquiries',
+      icon: '📝',
+      label: 'Enquiry Management',
+      desc: 'View all enquiries and update status and admin comments'
     }
   ];
 
